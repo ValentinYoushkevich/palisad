@@ -1,0 +1,80 @@
+<template>
+  <div class="activityFilters">
+    <Calendar
+      v-model="dateFrom"
+      dateFormat="dd.mm.yy"
+      placeholder="От"
+      showIcon
+      @date-select="onFilterChange"
+    />
+    <Calendar
+      v-model="dateTo"
+      dateFormat="dd.mm.yy"
+      placeholder="До"
+      showIcon
+      @date-select="onFilterChange"
+    />
+    <Dropdown
+      v-model="eventType"
+      :options="EVENT_TYPE_OPTIONS"
+      optionLabel="label"
+      optionValue="value"
+      placeholder="Тип события"
+      showClear
+      @change="onFilterChange"
+    />
+  </div>
+</template>
+
+<script setup>
+import { useActivityStore } from '@/stores/activity.store'
+import Calendar from 'primevue/calendar'
+import Dropdown from 'primevue/dropdown'
+import { computed } from 'vue'
+
+defineOptions({ name: 'ActivityFilters' })
+
+const emit = defineEmits(['change'])
+const activityStore = useActivityStore()
+
+const EVENT_TYPE_OPTIONS = [
+  { label: 'Растение создано', value: 'plant.created' },
+  { label: 'Растение изменено', value: 'plant.updated' },
+  { label: 'Растение удалено', value: 'plant.deleted' },
+  { label: 'Смена статуса', value: 'plant.status_changed' },
+  { label: 'Операция добавлена', value: 'operation.created' },
+  { label: 'Фото прикреплено', value: 'photo.attached' },
+  { label: 'Движение записано', value: 'movement.created' },
+  { label: 'Локация создана', value: 'location.created' },
+  { label: 'Сотрудник добавлен', value: 'user.created' },
+  { label: 'Роль изменена', value: 'user.role_changed' },
+  { label: 'Вход в систему', value: 'auth.login' }
+]
+
+const dateFrom = computed({
+  get: () => activityStore.filters.dateFrom,
+  set: (value) => activityStore.setFilter('dateFrom', value)
+})
+
+const dateTo = computed({
+  get: () => activityStore.filters.dateTo,
+  set: (value) => activityStore.setFilter('dateTo', value)
+})
+
+const eventType = computed({
+  get: () => activityStore.filters.eventType,
+  set: (value) => activityStore.setFilter('eventType', value)
+})
+
+function onFilterChange() {
+  emit('change')
+}
+</script>
+
+<style lang="scss" scoped>
+.activityFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+</style>

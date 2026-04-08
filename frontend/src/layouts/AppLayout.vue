@@ -92,6 +92,11 @@ const commonNavItems = computed(() => {
       visible: authStore.isAuthenticated
     },
     {
+      to: '/activity',
+      label: 'Лента',
+      visible: authStore.isAuthenticated
+    },
+    {
       to: '/labels',
       label: 'Этикетки',
       visible: authStore.isAuthenticated

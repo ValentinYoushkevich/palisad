@@ -1,3 +1,4 @@
+import ActivityPage from '@/pages/activity/ActivityPage.vue'
 import CatalogPage from '@/pages/catalog/CatalogPage.vue'
 import LabelsPage from '@/pages/labels/LabelsPage.vue'
 import LocationsPage from '@/pages/locations/LocationsPage.vue'
@@ -60,6 +61,14 @@ const routes = [
     path: '/catalog',
     name: 'catalog',
     component: CatalogPage,
+    meta: {
+      public: false
+    }
+  },
+  {
+    path: '/activity',
+    name: 'activity',
+    component: ActivityPage,
     meta: {
       public: false
     }
