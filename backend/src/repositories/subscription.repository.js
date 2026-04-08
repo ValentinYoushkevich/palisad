@@ -18,3 +18,13 @@ export function getActive(accountId) {
     .orderBy('created_at', 'desc')
     .first();
 }
+
+export function getActiveWithPlan(accountId) {
+  return db('subscriptions')
+    .join('plans', 'subscriptions.plan_id', 'plans.id')
+    .where('subscriptions.account_id', accountId)
+    .whereIn('subscriptions.status', ['trial', 'active'])
+    .select('subscriptions.*', 'plans.*')
+    .orderBy('subscriptions.created_at', 'desc')
+    .first();
+}

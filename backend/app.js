@@ -8,6 +8,7 @@ import morgan from 'morgan';
 import errorHandler from '@/middlewares/errorHandler.js';
 import authRouter from '@/routes/auth.router.js';
 import healthRouter from '@/routes/health.router.js';
+import nurseryRouter from '@/routes/nursery.router.js';
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use(cookieParser());
 
 app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/nurseries', nurseryRouter);
 
 app.use(errorHandler);
 

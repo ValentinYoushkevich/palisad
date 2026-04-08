@@ -21,3 +21,10 @@ export function clearMustChangePassword(accountId) {
       updated_at: db.fn.now(),
     });
 }
+
+export function create(data) {
+  return db('users')
+    .insert(data)
+    .returning('*')
+    .then((rows) => rows[0]);
+}
