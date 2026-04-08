@@ -1,5 +1,6 @@
 import App from '@/App.vue'
 import '@/assets/main.css'
+import db from '@/db/indexedDb'
 import { registerServiceWorker } from '@/registerServiceWorker'
 import router from '@/router'
 import http from '@/services/http'
@@ -25,6 +26,10 @@ app.use(router)
 app.use(PrimeVue)
 app.use(ToastService)
 app.use(ConfirmationService)
+
+db.open().catch((error) => {
+  console.error('Dexie open failed:', error)
+})
 
 app.mount('#app')
 
