@@ -67,7 +67,7 @@ router.beforeEach(async (to) => {
   const isChangePasswordRoute = to.path === '/change-password'
   const isNurseryCreateRoute = to.path === '/nursery/create'
 
-  if (!authStore.isAuthenticated) {
+  if (!authStore.isAuthenticated && !authStore.isAuthInitialized) {
     await authStore.initAuth()
   }
 

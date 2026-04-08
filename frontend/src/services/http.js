@@ -2,48 +2,40 @@ import { useAuthStore } from '@/stores/auth.store'
 import axios from 'axios'
 
 const http = axios.create({
-  baseURL: '/api'
+  baseURL: '/api',
+  withCredentials: true
 })
 
 let isRefreshing = false
 let pendingRequests = []
+let isRedirectingToLogin = false
 
-function resolvePendingRequests(newAccessToken) {
-  pendingRequests.forEach((callback) => callback(newAccessToken))
+function resolvePendingRequests(isSuccess) {
+  pendingRequests.forEach((callback) => callback(isSuccess))
   pendingRequests = []
 }
 
 function rejectPendingRequests() {
-  pendingRequests.forEach((callback) => callback(''))
+  pendingRequests.forEach((callback) => callback(false))
   pendingRequests = []
 }
 
 async function refreshAccessToken() {
-  const authStore = useAuthStore()
-
-  if (!authStore.refreshToken) {
-    throw new Error('No refresh token')
-  }
-
-  const response = await axios.post('/api/auth/refresh', {
-    refreshToken: authStore.refreshToken
-  })
-
-  const nextAccessToken = response?.data?.accessToken || ''
-  const nextRefreshToken = response?.data?.refreshToken || authStore.refreshToken
-
-  if (!nextAccessToken) {
-    throw new Error('Invalid refresh response')
-  }
-
-  authStore.setTokens(nextAccessToken, nextRefreshToken)
-  return nextAccessToken
+  const response = await axios.post('/api/auth/refresh', {}, { withCredentials: true })
+  return response?.status >= 200 && response?.status < 300
 }
 
 function logoutAndRedirect() {
   const authStore = useAuthStore()
   authStore.clearSession()
-  window.location.href = '/login'
+
+  // Avoid recursive reloads when refresh fails on the login page.
+  if (globalThis.location.pathname === '/login' || isRedirectingToLogin) {
+    return
+  }
+
+  isRedirectingToLogin = true
+  globalThis.location.assign('/login')
 }
 
 http.interceptors.request.use((config) => {
@@ -68,33 +60,32 @@ http.interceptors.response.use(
     const originalRequest = error?.config
 
     if (!originalRequest) {
-      return Promise.reject(error)
+      throw error
     }
 
     const isRefreshRequest = originalRequest?.url?.includes('/auth/refresh')
 
     if (status === 403) {
       logoutAndRedirect()
-      return Promise.reject(error)
+      throw error
     }
 
     if (status !== 401 || originalRequest._retry || isRefreshRequest) {
       if (status === 401 && isRefreshRequest) {
         logoutAndRedirect()
       }
-      return Promise.reject(error)
+      throw error
     }
 
     originalRequest._retry = true
 
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
-        pendingRequests.push((token) => {
-          if (!token) {
+        pendingRequests.push((isSuccess) => {
+          if (!isSuccess) {
             reject(error)
             return
           }
-          originalRequest.headers.Authorization = `Bearer ${token}`
           resolve(http(originalRequest))
         })
       })
@@ -103,14 +94,13 @@ http.interceptors.response.use(
     isRefreshing = true
 
     try {
-      const newAccessToken = await refreshAccessToken()
-      resolvePendingRequests(newAccessToken)
-      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
+      const isRefreshOk = await refreshAccessToken()
+      resolvePendingRequests(isRefreshOk)
       return http(originalRequest)
     } catch (refreshError) {
       rejectPendingRequests()
       logoutAndRedirect()
-      return Promise.reject(refreshError)
+      throw refreshError
     } finally {
       isRefreshing = false
     }

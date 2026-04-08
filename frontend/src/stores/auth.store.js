@@ -88,16 +88,21 @@ export const useAuthStore = defineStore('auth', {
           email,
           password
         })
-        const accessToken = response?.data?.accessToken || ''
-        const refreshToken = response?.data?.refreshToken || ''
-        const user = response?.data?.user || null
-
-        if (!accessToken || !refreshToken || !user) {
-          throw new Error('Invalid login response')
+        const mustChangePassword = Boolean(
+          response?.data?.mustChangePassword || response?.data?.must_change_password
+        )
+        const responseUser = response?.data?.user || null
+        const nextUser = responseUser || this.user || {
+          email,
+          role: '',
+          mustChangePassword
         }
 
-        this.setTokens(accessToken, refreshToken)
-        this.setUser(user)
+        this.setUser({
+          ...nextUser,
+          mustChangePassword,
+          must_change_password: mustChangePassword
+        })
         this.isAuthInitialized = true
 
         if (this.mustChangePassword) {
@@ -127,13 +132,31 @@ export const useAuthStore = defineStore('auth', {
 
       try {
         const response = await authApi.refresh()
-        const accessToken = response?.data?.accessToken || ''
-        const refreshToken = response?.data?.refreshToken || ''
-        const user = response?.data?.user || null
+        const mustChangePassword = Boolean(
+          response?.data?.mustChangePassword || response?.data?.must_change_password
+        )
+        const responseUser = response?.data?.user || null
 
-        if (accessToken && refreshToken && user) {
-          this.setTokens(accessToken, refreshToken)
-          this.setUser(user)
+        if (responseUser) {
+          this.setUser({
+            ...responseUser,
+            mustChangePassword,
+            must_change_password: mustChangePassword
+          })
+          return
+        }
+
+        if (response?.status >= 200 && response?.status < 300) {
+          const fallbackUser = this.user || {
+            role: '',
+            mustChangePassword
+          }
+
+          this.setUser({
+            ...fallbackUser,
+            mustChangePassword: Boolean(fallbackUser.mustChangePassword || mustChangePassword),
+            must_change_password: Boolean(fallbackUser.must_change_password || mustChangePassword)
+          })
           return
         }
 
@@ -176,7 +199,8 @@ export const useAuthStore = defineStore('auth', {
     clearSession() {
       this.clearTokens()
       this.setUser(null)
-      this.isAuthInitialized = false
+      // Session has been checked and is empty; do not re-run refresh on every navigation.
+      this.isAuthInitialized = true
     }
   }
 })
