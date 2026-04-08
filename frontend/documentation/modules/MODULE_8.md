@@ -4,24 +4,11 @@
 
 ---
 
-## Шаг 1. API
+## Шаг 1. Правило слоя Store
 
-`src/api/operations.api.js`:
-
-```js
-import api from '@/api/index.js';
-
-const base = (nurseryId, plantId) => `/nurseries/${nurseryId}/plants/${plantId}/operations`;
-
-export const operationsApi = {
-  getAll:     (nurseryId, plantId) => api.get(base(nurseryId, plantId)),
-  create:     (nurseryId, plantId, data) => api.post(base(nurseryId, plantId), data),
-  update:     (nurseryId, plantId, id, data) => api.patch(`${base(nurseryId, plantId)}/${id}`, data),
-  softDelete: (nurseryId, plantId, id) => api.delete(`${base(nurseryId, plantId)}/${id}`),
-  attachPhoto:(nurseryId, plantId, id, data) => api.post(`${base(nurseryId, plantId)}/${id}/photos`, data),
-  deletePhoto:(nurseryId, plantId, id, photoId) => api.delete(`${base(nurseryId, plantId)}/${id}/photos/${photoId}`),
-};
-```
+- Методы `operations` и `photos` реализуются в `src/stores/operations.store.js`.
+- Отдельные API-модули в `src/api/*` не создаются.
+- `try/catch` для API ошибок используется в actions store.
 
 ---
 
@@ -31,7 +18,7 @@ export const operationsApi = {
 
 ```js
 import { defineStore } from 'pinia';
-import { operationsApi } from '@/api/operations.api.js';
+import http from '@/services/http.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 import { usePlantsStore } from '@/stores/plants.store.js';
 import { addToQueue } from '@/db/syncQueue.service.js';
@@ -56,7 +43,7 @@ export const useOperationsStore = defineStore('operations', {
       const nursery = useNurseryStore();
       this.isLoading = true;
       try {
-        const { data } = await operationsApi.getAll(nursery.nurseryId, plantId);
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/plants/${plantId}/operations`);
         this.operationsByPlant[plantId] = data;
         await db.operations.bulkPut(data);
       } finally {
@@ -82,7 +69,7 @@ export const useOperationsStore = defineStore('operations', {
 
       if (isOnline.value) {
         const nursery = useNurseryStore();
-        const { data } = await operationsApi.create(nursery.nurseryId, plantId, formData);
+        const { data } = await http.post(`/nurseries/${nursery.nurseryId}/plants/${plantId}/operations`, formData);
 
         if (!this.operationsByPlant[plantId]) this.operationsByPlant[plantId] = [];
         this.operationsByPlant[plantId].unshift(data);
@@ -117,7 +104,7 @@ export const useOperationsStore = defineStore('operations', {
 
       if (isOnline.value) {
         const nursery = useNurseryStore();
-        const { data } = await operationsApi.update(nursery.nurseryId, plantId, id, formData);
+        const { data } = await http.patch(`/nurseries/${nursery.nurseryId}/plants/${plantId}/operations/${id}`, formData);
         updateInMap(this.operationsByPlant, plantId, data);
         await db.operations.put(data);
       } else {
@@ -135,7 +122,7 @@ export const useOperationsStore = defineStore('operations', {
 
       if (isOnline.value) {
         const nursery = useNurseryStore();
-        await operationsApi.softDelete(nursery.nurseryId, plantId, id);
+        await http.delete(`/nurseries/${nursery.nurseryId}/plants/${plantId}/operations/${id}`);
         removeFromMap(this.operationsByPlant, plantId, id);
         await db.operations.update(id, { deleted_at: new Date().toISOString() });
       } else {
@@ -150,7 +137,7 @@ export const useOperationsStore = defineStore('operations', {
 
       if (isOnline.value) {
         const nursery = useNurseryStore();
-        const { data } = await operationsApi.attachPhoto(nursery.nurseryId, plantId, operationId, { url: file });
+        const { data } = await http.post(`/nurseries/${nursery.nurseryId}/plants/${plantId}/operations/${operationId}/photos`, { url: file });
         return data;
       } else {
         const localId = await savePhoto(operationId, file);
@@ -160,7 +147,7 @@ export const useOperationsStore = defineStore('operations', {
 
     async deletePhoto(photoId, operationId, plantId) {
       const nursery = useNurseryStore();
-      await operationsApi.deletePhoto(nursery.nurseryId, plantId, operationId, photoId);
+      await http.delete(`/nurseries/${nursery.nurseryId}/plants/${plantId}/operations/${operationId}/photos/${photoId}`);
       await this.fetchOperations(plantId);
     },
 

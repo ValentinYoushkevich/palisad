@@ -51,19 +51,18 @@ async function handleCreate() {
 
   errorText.value = ''
 
-  try {
-    await nurseryStore.createNursery({
-      name: nextName,
-      address: address.value
-    })
-    await nurseryStore.fetchSubscription()
-    await router.push('/plants')
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn('Create nursery failed', error)
-    }
-    errorText.value = error?.response?.data?.error || 'Ошибка создания питомника.'
+  const result = await nurseryStore.createNursery({
+    name: nextName,
+    address: address.value
+  })
+
+  if (!result?.ok) {
+    errorText.value = result?.error || nurseryStore.nurseryError || 'Ошибка создания питомника.'
+    return
   }
+
+  await nurseryStore.fetchSubscription()
+  await router.push('/plants')
 }
 </script>
 

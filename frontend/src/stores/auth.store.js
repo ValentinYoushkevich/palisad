@@ -1,5 +1,5 @@
-import { authApi } from '@/api/auth.api'
 import db from '@/db/indexedDb'
+import http from '@/services/http'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { defineStore } from 'pinia'
 
@@ -35,6 +35,7 @@ export const useAuthStore = defineStore('auth', {
     accessToken: localStorage.getItem(ACCESS_TOKEN_KEY) || '',
     refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) || '',
     user: parseStoredUser(),
+    authError: '',
     isLoading: false,
     isAuthInitialized: false
   }),
@@ -82,9 +83,10 @@ export const useAuthStore = defineStore('auth', {
     },
     async login(email, password) {
       this.isLoading = true
+      this.authError = ''
 
       try {
-        const response = await authApi.login({
+        const response = await http.post('/auth/login', {
           email,
           password
         })
@@ -106,10 +108,13 @@ export const useAuthStore = defineStore('auth', {
         this.isAuthInitialized = true
 
         if (this.mustChangePassword) {
-          return { redirect: '/change-password' }
+          return { redirect: '/change-password', ok: true }
         }
 
-        return { redirect: '/plants' }
+        return { redirect: '/plants', ok: true }
+      } catch (error) {
+        this.authError = error?.response?.data?.error || 'Не удалось выполнить вход. Проверьте данные.'
+        return { ok: false, error: this.authError, redirect: null }
       } finally {
         this.isLoading = false
       }
@@ -118,7 +123,7 @@ export const useAuthStore = defineStore('auth', {
       const nurseryStore = useNurseryStore()
 
       try {
-        await authApi.logout()
+        await http.post('/auth/logout')
       } finally {
         this.clearSession()
         nurseryStore.resetState()
@@ -131,7 +136,7 @@ export const useAuthStore = defineStore('auth', {
       }
 
       try {
-        const response = await authApi.refresh()
+        const response = await http.post('/auth/refresh')
         const mustChangePassword = Boolean(
           response?.data?.mustChangePassword || response?.data?.must_change_password
         )
@@ -172,9 +177,10 @@ export const useAuthStore = defineStore('auth', {
     },
     async changePassword(currentPassword, newPassword) {
       this.isLoading = true
+      this.authError = ''
 
       try {
-        const response = await authApi.changePassword({
+        const response = await http.post('/auth/change-password', {
           currentPassword,
           newPassword
         })
@@ -192,6 +198,10 @@ export const useAuthStore = defineStore('auth', {
             must_change_password: false
           })
         }
+        return { ok: true }
+      } catch (error) {
+        this.authError = error?.response?.data?.error || 'Не удалось обновить пароль.'
+        return { ok: false, error: this.authError }
       } finally {
         this.isLoading = false
       }

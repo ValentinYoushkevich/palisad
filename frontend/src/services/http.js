@@ -1,3 +1,4 @@
+import { refreshAndRetryRequest } from '@/helpers/httpRefresh.helper'
 import { useAuthStore } from '@/stores/auth.store'
 import axios from 'axios'
 
@@ -93,17 +94,18 @@ http.interceptors.response.use(
 
     isRefreshing = true
 
-    try {
-      const isRefreshOk = await refreshAccessToken()
-      resolvePendingRequests(isRefreshOk)
-      return http(originalRequest)
-    } catch (refreshError) {
-      rejectPendingRequests()
-      logoutAndRedirect()
-      throw refreshError
-    } finally {
+    const response = await refreshAndRetryRequest({
+      refreshAccessToken,
+      resolvePendingRequests,
+      rejectPendingRequests,
+      logoutAndRedirect,
+      http,
+      originalRequest
+    }).finally(() => {
       isRefreshing = false
-    }
+    })
+
+    return response
   }
 )
 

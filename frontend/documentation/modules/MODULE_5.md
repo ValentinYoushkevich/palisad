@@ -4,23 +4,11 @@
 
 ---
 
-## Шаг 1. API
+## Шаг 1. Правило слоя Store
 
-`src/api/locations.api.js`:
-
-```js
-import api from '@/api/index.js';
-
-const base = (nurseryId) => `/nurseries/${nurseryId}/locations`;
-
-export const locationsApi = {
-  getAll:  (nurseryId) => api.get(base(nurseryId)),
-  getTree: (nurseryId) => api.get(`${base(nurseryId)}/tree`),
-  create:  (nurseryId, data) => api.post(base(nurseryId), data),
-  update:  (nurseryId, id, data) => api.patch(`${base(nurseryId)}/${id}`, data),
-  remove:  (nurseryId, id) => api.delete(`${base(nurseryId)}/${id}`),
-};
-```
+- Методы по сущности `locations` реализуются в `src/stores/locations.store.js`.
+- Отдельные API-модули в `src/api/*` не используются.
+- `try/catch` для API-запросов размещается в actions store.
 
 ---
 
@@ -30,7 +18,7 @@ export const locationsApi = {
 
 ```js
 import { defineStore } from 'pinia';
-import { locationsApi } from '@/api/locations.api.js';
+import http from '@/services/http.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 import { upsertMany, clearTable } from '@/db/dbUtils.js';
 import db from '@/db/indexedDb.js';

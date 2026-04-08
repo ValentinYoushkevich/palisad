@@ -45,16 +45,15 @@ async function submitLogin() {
     return
   }
 
-  try {
-    const result = await authStore.login(email.value, password.value)
-    const redirectTo = route.query.redirect || result.redirect
-    await router.push(redirectTo)
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn('Login failed', error)
-    }
-    errorText.value = 'Не удалось выполнить вход. Проверьте данные.'
+  const result = await authStore.login(email.value, password.value)
+
+  if (!result?.ok) {
+    errorText.value = result?.error || authStore.authError || 'Не удалось выполнить вход. Проверьте данные.'
+    return
   }
+
+  const redirectTo = route.query.redirect || result.redirect
+  await router.push(redirectTo)
 }
 </script>
 

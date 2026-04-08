@@ -11,6 +11,24 @@ function debugSwLog(debugEnabled, message, payload) {
   console.info(`[sw] ${message}`, payload)
 }
 
+function bindUpdateLogs(registration, debug) {
+  registration.addEventListener('updatefound', () => {
+    debugSwLog(debug, 'updatefound')
+
+    const nextWorker = registration.installing
+
+    if (!nextWorker) {
+      return
+    }
+
+    nextWorker.addEventListener('statechange', () => {
+      debugSwLog(debug, 'worker state', {
+        state: nextWorker.state
+      })
+    })
+  })
+}
+
 export async function registerServiceWorker(options = {}) {
   const {
     enableInDev = false,
@@ -37,29 +55,18 @@ export async function registerServiceWorker(options = {}) {
   })
 
   window.addEventListener('load', async () => {
-    try {
-      const registration = await navigator.serviceWorker.register('/sw.js')
-      debugSwLog(debug, 'registered', {
-        scope: registration.scope
-      })
-
-      registration.addEventListener('updatefound', () => {
-        debugSwLog(debug, 'updatefound')
-
-        const nextWorker = registration.installing
-
-        if (!nextWorker) {
-          return
-        }
-
-        nextWorker.addEventListener('statechange', () => {
-          debugSwLog(debug, 'worker state', {
-            state: nextWorker.state
-          })
-        })
-      })
-    } catch (error) {
+    const registration = await navigator.serviceWorker.register('/sw.js').catch((error) => {
       console.warn('Service worker registration failed', error)
+      return null
+    })
+
+    if (!registration) {
+      return
     }
+
+    debugSwLog(debug, 'registered', {
+      scope: registration.scope
+    })
+    bindUpdateLogs(registration, debug)
   })
 }

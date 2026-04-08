@@ -76,16 +76,15 @@ async function submitChangePassword() {
     return
   }
 
-  try {
-    await authStore.changePassword(currentPassword.value, newPassword.value)
-    successText.value = 'Пароль обновлен. Перенаправляем на страницу растений...'
-    await router.push('/plants')
-  } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn('Change password failed', error)
-    }
-    errorText.value = 'Не удалось обновить пароль.'
+  const result = await authStore.changePassword(currentPassword.value, newPassword.value)
+
+  if (!result?.ok) {
+    errorText.value = result?.error || authStore.authError || 'Не удалось обновить пароль.'
+    return
   }
+
+  successText.value = 'Пароль обновлен. Перенаправляем на страницу растений...'
+  await router.push('/plants')
 }
 </script>
 

@@ -4,31 +4,11 @@
 
 ---
 
-## Шаг 1. API-функции
+## Шаг 1. Правило слоя Store
 
-`src/api/nursery.api.js`:
-
-```js
-import api from '@/api/index.js';
-
-export const nurseryApi = {
-  create:  (data) => api.post('/nurseries', data),
-  getMy:   () => api.get('/nurseries/my'),
-  update:  (data) => api.patch('/nurseries/my', data),
-};
-```
-
-`src/api/subscription.api.js`:
-
-```js
-import api from '@/api/index.js';
-
-export const subscriptionApi = {
-  getCurrent: () => api.get('/subscriptions/current'),
-  getPlans:   () => api.get('/plans'),
-  change:     (planId) => api.post('/subscriptions/change', { planId }),
-};
-```
+- Отдельные API-модули в `src/api/*` не используются.
+- Методы для `nursery` и `subscription` реализуются в `src/stores/nursery.store.js`.
+- `try/catch` для API-запросов размещается в actions store.
 
 ---
 
@@ -38,8 +18,7 @@ export const subscriptionApi = {
 
 ```js
 import { defineStore } from 'pinia';
-import { nurseryApi } from '@/api/nursery.api.js';
-import { subscriptionApi } from '@/api/subscription.api.js';
+import http from '@/services/http.js';
 
 export const useNurseryStore = defineStore('nursery', {
   state: () => ({
@@ -67,7 +46,7 @@ export const useNurseryStore = defineStore('nursery', {
     async fetchNursery() {
       this.isLoading = true;
       try {
-        const { data } = await nurseryApi.getMy();
+        const { data } = await http.get('/nurseries/my');
         this.nursery = data;
       } catch (err) {
         if (err.response?.status === 404) {
@@ -81,7 +60,7 @@ export const useNurseryStore = defineStore('nursery', {
     async createNursery(formData) {
       this.isLoading = true;
       try {
-        const { data } = await nurseryApi.create(formData);
+        const { data } = await http.post('/nurseries', formData);
         this.nursery = data;
       } finally {
         this.isLoading = false;
@@ -91,7 +70,7 @@ export const useNurseryStore = defineStore('nursery', {
     async updateNursery(formData) {
       this.isLoading = true;
       try {
-        const { data } = await nurseryApi.update(formData);
+        const { data } = await http.patch('/nurseries/my', formData);
         this.nursery = data;
       } finally {
         this.isLoading = false;
@@ -99,19 +78,19 @@ export const useNurseryStore = defineStore('nursery', {
     },
 
     async fetchSubscription() {
-      const { data } = await subscriptionApi.getCurrent();
+      const { data } = await http.get('/subscriptions/current');
       this.subscription = data;
     },
 
     async fetchPlans() {
-      const { data } = await subscriptionApi.getPlans();
+      const { data } = await http.get('/plans');
       this.plans = data;
     },
 
     async changePlan(planId) {
       this.isLoading = true;
       try {
-        await subscriptionApi.change(planId);
+        await http.post('/subscriptions/change', { planId });
         await this.fetchSubscription();
       } finally {
         this.isLoading = false;

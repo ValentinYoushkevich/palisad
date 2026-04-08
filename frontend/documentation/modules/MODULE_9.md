@@ -4,21 +4,11 @@
 
 ---
 
-## Шаг 1. API
+## Шаг 1. Правило слоя Store
 
-`src/api/movements.api.js`:
-
-```js
-import api from '@/api/index.js';
-
-const base = (nurseryId, plantId) => `/nurseries/${nurseryId}/plants/${plantId}/movements`;
-
-export const movementsApi = {
-  getAll:  (nurseryId, plantId) => api.get(base(nurseryId, plantId)),
-  create:  (nurseryId, plantId, data) => api.post(base(nurseryId, plantId), data),
-  remove:  (nurseryId, plantId, id) => api.delete(`${base(nurseryId, plantId)}/${id}`),
-};
-```
+- Методы по сущности `movements` реализуются в `src/stores/movements.store.js`.
+- Файлы `src/api/*` не создаются.
+- Обработка ошибок API (`try/catch`) выполняется в actions store.
 
 ---
 
@@ -28,7 +18,7 @@ export const movementsApi = {
 
 ```js
 import { defineStore } from 'pinia';
-import { movementsApi } from '@/api/movements.api.js';
+import http from '@/services/http.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 import { usePlantsStore } from '@/stores/plants.store.js';
 import { addToQueue } from '@/db/syncQueue.service.js';
@@ -52,7 +42,7 @@ export const useMovementsStore = defineStore('movements', {
       const nursery = useNurseryStore();
       this.isLoading = true;
       try {
-        const { data } = await movementsApi.getAll(nursery.nurseryId, plantId);
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/plants/${plantId}/movements`);
         this.movementsByPlant[plantId] = data;
         await db.movements.bulkPut(data);
       } finally {
@@ -79,7 +69,7 @@ export const useMovementsStore = defineStore('movements', {
 
       if (isOnline.value) {
         const nursery = useNurseryStore();
-        const { data } = await movementsApi.create(nursery.nurseryId, plantId, formData);
+        const { data } = await http.post(`/nurseries/${nursery.nurseryId}/plants/${plantId}/movements`, formData);
 
         if (!this.movementsByPlant[plantId]) this.movementsByPlant[plantId] = [];
         this.movementsByPlant[plantId].unshift(data);
@@ -111,7 +101,7 @@ export const useMovementsStore = defineStore('movements', {
 
     async deleteMovement(id, plantId) {
       const nursery = useNurseryStore();
-      await movementsApi.remove(nursery.nurseryId, plantId, id);
+      await http.delete(`/nurseries/${nursery.nurseryId}/plants/${plantId}/movements/${id}`);
       if (this.movementsByPlant[plantId]) {
         this.movementsByPlant[plantId] = this.movementsByPlant[plantId].filter(m => m.id !== id);
       }

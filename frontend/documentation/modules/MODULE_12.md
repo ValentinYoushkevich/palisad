@@ -15,7 +15,7 @@ import { getPending, markDone, markFailed, getFailedCount } from '@/db/syncQueue
 import { getPendingPhotos, markPhotoDone, markPhotoFailed } from '@/db/pendingPhotos.service.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 import { useToast } from 'primevue/usetoast';
-import api from '@/api/index.js';
+import http from '@/services/http.js';
 
 export const syncStatus = ref('idle'); // 'idle' | 'syncing' | 'error'
 export const pendingCount = ref(0);
@@ -73,15 +73,15 @@ async function processItem(item, toast) {
     const { type, payload } = item;
 
     if (type === 'create_operation') {
-      await api.post(`/nurseries/${nurseryId}/plants/${payload.plantId}/operations`, payload);
+      await http.post(`/nurseries/${nurseryId}/plants/${payload.plantId}/operations`, payload);
     } else if (type === 'update_operation') {
-      await api.patch(`/nurseries/${nurseryId}/plants/${payload.plantId}/operations/${payload.id}`, payload);
+      await http.patch(`/nurseries/${nurseryId}/plants/${payload.plantId}/operations/${payload.id}`, payload);
     } else if (type === 'delete_operation') {
-      await api.delete(`/nurseries/${nurseryId}/plants/${payload.plantId}/operations/${payload.id}`);
+      await http.delete(`/nurseries/${nurseryId}/plants/${payload.plantId}/operations/${payload.id}`);
     } else if (type === 'create_movement') {
-      await api.post(`/nurseries/${nurseryId}/plants/${payload.plantId}/movements`, payload);
+      await http.post(`/nurseries/${nurseryId}/plants/${payload.plantId}/movements`, payload);
     } else if (type === 'delete_movement') {
-      await api.delete(`/nurseries/${nurseryId}/plants/${payload.plantId}/movements/${payload.id}`);
+      await http.delete(`/nurseries/${nurseryId}/plants/${payload.plantId}/movements/${payload.id}`);
     }
 
     await markDone(item.id);
@@ -118,7 +118,7 @@ async function processPhotoItem(item, toast) {
     const formData = new FormData();
     formData.append('file', new File([pending.blob], 'photo.jpg', { type: pending.mime_type }));
 
-    await api.post(
+    await http.post(
       `/nurseries/${nurseryId}/plants/${payload.plantId}/operations/${payload.operationId}/photos`,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } }

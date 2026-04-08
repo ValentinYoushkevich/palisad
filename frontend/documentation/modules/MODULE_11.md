@@ -4,18 +4,11 @@
 
 ---
 
-## Шаг 1. API
+## Шаг 1. Правило слоя Store
 
-`src/api/activity.api.js`:
-
-```js
-import api from '@/api/index.js';
-
-export const activityApi = {
-  getLogs: (nurseryId, params) =>
-    api.get(`/nurseries/${nurseryId}/activity`, { params }),
-};
-```
+- Методы по `activity` реализуются в `src/stores/activity.store.js`.
+- API-файлы в `src/api/*` не создаются.
+- `try/catch` для API-запросов размещается в actions store.
 
 ---
 
@@ -25,7 +18,7 @@ export const activityApi = {
 
 ```js
 import { defineStore } from 'pinia';
-import { activityApi } from '@/api/activity.api.js';
+import http from '@/services/http.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 
 export const useActivityStore = defineStore('activity', {
@@ -61,7 +54,7 @@ export const useActivityStore = defineStore('activity', {
       }
       this.isLoading = true;
       try {
-        const { data } = await activityApi.getLogs(nursery.nurseryId, {
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/activity`, {
           page: this.pagination.page,
           perPage: this.pagination.perPage,
           ...buildFilterParams(this.filters),

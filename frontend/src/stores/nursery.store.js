@@ -1,5 +1,4 @@
-import { nurseryApi } from '@/api/nursery.api'
-import { subscriptionApi } from '@/api/subscription.api'
+import http from '@/services/http'
 import { defineStore } from 'pinia'
 
 export const useNurseryStore = defineStore('nursery', {
@@ -7,6 +6,7 @@ export const useNurseryStore = defineStore('nursery', {
     nursery: null,
     subscription: null,
     plans: [],
+    nurseryError: '',
     isLoading: false,
     isInitialized: false
   }),
@@ -26,9 +26,10 @@ export const useNurseryStore = defineStore('nursery', {
   actions: {
     async fetchNursery() {
       this.isLoading = true
+      this.nurseryError = ''
 
       try {
-        const response = await nurseryApi.getMy()
+        const response = await http.get('/nurseries/my')
         this.nursery = response?.data || null
       } catch (error) {
         if (error?.response?.status === 404) {
@@ -36,6 +37,7 @@ export const useNurseryStore = defineStore('nursery', {
           return
         }
 
+        this.nurseryError = error?.response?.data?.error || 'Не удалось загрузить питомник.'
         throw error
       } finally {
         this.isLoading = false
@@ -43,38 +45,67 @@ export const useNurseryStore = defineStore('nursery', {
     },
     async createNursery(formData) {
       this.isLoading = true
+      this.nurseryError = ''
 
       try {
-        const response = await nurseryApi.create(formData)
+        const response = await http.post('/nurseries', formData)
         this.nursery = response?.data || null
+        return { ok: true }
+      } catch (error) {
+        this.nurseryError = error?.response?.data?.error || 'Ошибка создания питомника.'
+        return { ok: false, error: this.nurseryError }
       } finally {
         this.isLoading = false
       }
     },
     async updateNursery(formData) {
       this.isLoading = true
+      this.nurseryError = ''
 
       try {
-        const response = await nurseryApi.update(formData)
+        const response = await http.patch('/nurseries/my', formData)
         this.nursery = response?.data || null
+        return { ok: true }
+      } catch (error) {
+        this.nurseryError = error?.response?.data?.error || 'Ошибка обновления питомника.'
+        return { ok: false, error: this.nurseryError }
       } finally {
         this.isLoading = false
       }
     },
     async fetchSubscription() {
-      const response = await subscriptionApi.getCurrent()
-      this.subscription = response?.data || null
+      this.nurseryError = ''
+
+      try {
+        const response = await http.get('/subscriptions/current')
+        this.subscription = response?.data || null
+      } catch (error) {
+        this.nurseryError = error?.response?.data?.error || 'Не удалось загрузить подписку.'
+        throw error
+      }
     },
     async fetchPlans() {
-      const response = await subscriptionApi.getPlans()
-      this.plans = response?.data || []
+      this.nurseryError = ''
+
+      try {
+        const response = await http.get('/plans')
+        this.plans = response?.data || []
+      } catch (error) {
+        this.nurseryError = error?.response?.data?.error || 'Не удалось загрузить планы.'
+        throw error
+      }
     },
     async changePlan(planId) {
       this.isLoading = true
+      this.nurseryError = ''
 
       try {
-        await subscriptionApi.change(planId)
+        await http.post('/subscriptions/change', { planId })
         await this.fetchSubscription()
+        return { ok: true }
+      } catch (error) {
+        this.nurseryError = error?.response?.data?.error || 'Не удалось сменить тариф.'
+        return { ok: false, error: this.nurseryError }
       } finally {
         this.isLoading = false
       }

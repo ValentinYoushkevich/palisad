@@ -4,44 +4,11 @@
 
 ---
 
-## Шаг 1. API
+## Шаг 1. Правило слоя Store
 
-`src/api/catalogs.api.js`:
-
-```js
-import api from '@/api/index.js';
-
-const base = (nurseryId, resource) => `/nurseries/${nurseryId}/${resource}`;
-
-export const speciesApi = {
-  getAll:  (nurseryId) => api.get(base(nurseryId, 'species')),
-  search:  (nurseryId, q) => api.get(base(nurseryId, 'species/search'), { params: { q } }),
-  create:  (nurseryId, data) => api.post(base(nurseryId, 'species'), data),
-  update:  (nurseryId, id, data) => api.patch(`${base(nurseryId, 'species')}/${id}`, data),
-  remove:  (nurseryId, id) => api.delete(`${base(nurseryId, 'species')}/${id}`),
-};
-
-export const tagsApi = {
-  getAll:  (nurseryId) => api.get(base(nurseryId, 'tags')),
-  create:  (nurseryId, data) => api.post(base(nurseryId, 'tags'), data),
-  update:  (nurseryId, id, data) => api.patch(`${base(nurseryId, 'tags')}/${id}`, data),
-  remove:  (nurseryId, id) => api.delete(`${base(nurseryId, 'tags')}/${id}`),
-};
-
-export const movementTypesApi = {
-  getAll:  (nurseryId) => api.get(base(nurseryId, 'movement-types')),
-  create:  (nurseryId, data) => api.post(base(nurseryId, 'movement-types'), data),
-  update:  (nurseryId, id, data) => api.patch(`${base(nurseryId, 'movement-types')}/${id}`, data),
-  remove:  (nurseryId, id) => api.delete(`${base(nurseryId, 'movement-types')}/${id}`),
-};
-
-export const containerTypesApi = {
-  getAll:  (nurseryId) => api.get(base(nurseryId, 'container-types')),
-  create:  (nurseryId, data) => api.post(base(nurseryId, 'container-types'), data),
-  update:  (nurseryId, id, data) => api.patch(`${base(nurseryId, 'container-types')}/${id}`, data),
-  remove:  (nurseryId, id) => api.delete(`${base(nurseryId, 'container-types')}/${id}`),
-};
-```
+- Для `species`, `tags`, `movementTypes`, `containerTypes` HTTP-методы описываются в соответствующих store.
+- Отдельные API-файлы в `src/api/*` не создаются.
+- Обработка API-ошибок (`try/catch`) выполняется в actions store.
 
 ---
 
@@ -51,7 +18,7 @@ export const containerTypesApi = {
 
 ```js
 import { defineStore } from 'pinia';
-import { speciesApi } from '@/api/catalogs.api.js';
+import http from '@/services/http.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 import { upsertMany, clearTable } from '@/db/dbUtils.js';
 import db from '@/db/indexedDb.js';
@@ -74,7 +41,7 @@ export const useSpeciesStore = defineStore('species', {
       const nursery = useNurseryStore();
       this.isLoading = true;
       try {
-        const { data } = await speciesApi.getAll(nursery.nurseryId);
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/species`);
         this.species = data;
         await this.syncToLocal(data);
       } finally {
@@ -100,7 +67,7 @@ export const useSpeciesStore = defineStore('species', {
       const nursery = useNurseryStore();
       this.isSearching = true;
       try {
-        const { data } = await speciesApi.search(nursery.nurseryId, query);
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/species/search`, { params: { q: query } });
         this.searchResults = data;
       } finally {
         this.isSearching = false;
@@ -109,7 +76,7 @@ export const useSpeciesStore = defineStore('species', {
 
     async createSpecies(formData) {
       const nursery = useNurseryStore();
-      const { data } = await speciesApi.create(nursery.nurseryId, formData);
+      const { data } = await http.post(`/nurseries/${nursery.nurseryId}/species`, formData);
       if (!data.alreadyExists) {
         this.species.push(data);
         await upsertMany('species', [data]);
@@ -119,14 +86,14 @@ export const useSpeciesStore = defineStore('species', {
 
     async updateSpecies(id, formData) {
       const nursery = useNurseryStore();
-      const { data } = await speciesApi.update(nursery.nurseryId, id, formData);
+      const { data } = await http.patch(`/nurseries/${nursery.nurseryId}/species/${id}`, formData);
       updateInList(this.species, data);
       await upsertMany('species', [data]);
     },
 
     async deleteSpecies(id) {
       const nursery = useNurseryStore();
-      await speciesApi.remove(nursery.nurseryId, id);
+      await http.delete(`/nurseries/${nursery.nurseryId}/species/${id}`);
       await this.fetchSpecies();
     },
   },
@@ -162,7 +129,7 @@ export function useDebounceFn(fn, delay) {
 
 ```js
 import { defineStore } from 'pinia';
-import { tagsApi } from '@/api/catalogs.api.js';
+import http from '@/services/http.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 import { upsertMany, clearTable } from '@/db/dbUtils.js';
 import db from '@/db/indexedDb.js';
@@ -179,7 +146,7 @@ export const useTagsStore = defineStore('tags', {
       const nursery = useNurseryStore();
       this.isLoading = true;
       try {
-        const { data } = await tagsApi.getAll(nursery.nurseryId);
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/tags`);
         this.tags = data;
         await clearTable('tags');
         await upsertMany('tags', data);
@@ -195,14 +162,14 @@ export const useTagsStore = defineStore('tags', {
 
     async createTag(formData) {
       const nursery = useNurseryStore();
-      const { data } = await tagsApi.create(nursery.nurseryId, formData);
+      const { data } = await http.post(`/nurseries/${nursery.nurseryId}/tags`, formData);
       this.tags.push(data);
       await upsertMany('tags', [data]);
     },
 
     async updateTag(id, formData) {
       const nursery = useNurseryStore();
-      const { data } = await tagsApi.update(nursery.nurseryId, id, formData);
+      const { data } = await http.patch(`/nurseries/${nursery.nurseryId}/tags/${id}`, formData);
       const idx = this.tags.findIndex(t => t.id === id);
       if (idx !== -1) this.tags.splice(idx, 1, data);
       await upsertMany('tags', [data]);
@@ -210,7 +177,7 @@ export const useTagsStore = defineStore('tags', {
 
     async deleteTag(id) {
       const nursery = useNurseryStore();
-      await tagsApi.remove(nursery.nurseryId, id);
+      await http.delete(`/nurseries/${nursery.nurseryId}/tags/${id}`);
       await this.fetchTags();
     },
   },
@@ -225,7 +192,7 @@ export const useTagsStore = defineStore('tags', {
 
 ```js
 import { defineStore } from 'pinia';
-import { movementTypesApi } from '@/api/catalogs.api.js';
+import http from '@/services/http.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 import { upsertMany, clearTable } from '@/db/dbUtils.js';
 import db from '@/db/indexedDb.js';
@@ -244,7 +211,7 @@ export const useMovementTypesStore = defineStore('movementTypes', {
       const nursery = useNurseryStore();
       this.isLoading = true;
       try {
-        const { data } = await movementTypesApi.getAll(nursery.nurseryId);
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/movement-types`);
         this.movementTypes = data;
         await clearTable('movement_types');
         await upsertMany('movement_types', data);
@@ -260,20 +227,20 @@ export const useMovementTypesStore = defineStore('movementTypes', {
 
     async createMovementType(formData) {
       const nursery = useNurseryStore();
-      const { data } = await movementTypesApi.create(nursery.nurseryId, formData);
+      const { data } = await http.post(`/nurseries/${nursery.nurseryId}/movement-types`, formData);
       this.movementTypes.push(data);
     },
 
     async updateMovementType(id, formData) {
       const nursery = useNurseryStore();
-      const { data } = await movementTypesApi.update(nursery.nurseryId, id, formData);
+      const { data } = await http.patch(`/nurseries/${nursery.nurseryId}/movement-types/${id}`, formData);
       const idx = this.movementTypes.findIndex(t => t.id === id);
       if (idx !== -1) this.movementTypes.splice(idx, 1, data);
     },
 
     async deleteMovementType(id) {
       const nursery = useNurseryStore();
-      await movementTypesApi.remove(nursery.nurseryId, id);
+      await http.delete(`/nurseries/${nursery.nurseryId}/movement-types/${id}`);
       this.movementTypes = this.movementTypes.filter(t => t.id !== id);
     },
   },
@@ -288,7 +255,7 @@ export const useMovementTypesStore = defineStore('movementTypes', {
 
 ```js
 import { defineStore } from 'pinia';
-import { containerTypesApi } from '@/api/catalogs.api.js';
+import http from '@/services/http.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 import { upsertMany, clearTable } from '@/db/dbUtils.js';
 import db from '@/db/indexedDb.js';
@@ -308,7 +275,7 @@ export const useContainerTypesStore = defineStore('containerTypes', {
       const nursery = useNurseryStore();
       this.isLoading = true;
       try {
-        const { data } = await containerTypesApi.getAll(nursery.nurseryId);
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/container-types`);
         this.containerTypes = data;
         await clearTable('container_types');
         await upsertMany('container_types', data);
@@ -324,20 +291,20 @@ export const useContainerTypesStore = defineStore('containerTypes', {
 
     async createContainerType(formData) {
       const nursery = useNurseryStore();
-      const { data } = await containerTypesApi.create(nursery.nurseryId, formData);
+      const { data } = await http.post(`/nurseries/${nursery.nurseryId}/container-types`, formData);
       this.containerTypes.push(data);
     },
 
     async updateContainerType(id, formData) {
       const nursery = useNurseryStore();
-      const { data } = await containerTypesApi.update(nursery.nurseryId, id, formData);
+      const { data } = await http.patch(`/nurseries/${nursery.nurseryId}/container-types/${id}`, formData);
       const idx = this.containerTypes.findIndex(t => t.id === id);
       if (idx !== -1) this.containerTypes.splice(idx, 1, data);
     },
 
     async deleteContainerType(id) {
       const nursery = useNurseryStore();
-      await containerTypesApi.remove(nursery.nurseryId, id);
+      await http.delete(`/nurseries/${nursery.nurseryId}/container-types/${id}`);
       this.containerTypes = this.containerTypes.filter(t => t.id !== id);
     },
   },

@@ -4,24 +4,11 @@
 
 ---
 
-## Шаг 1. API
+## Шаг 1. Правило слоя Store
 
-`src/api/staff.api.js`:
-
-```js
-import api from '@/api/index.js';
-
-const base = (nurseryId) => `/nurseries/${nurseryId}/users`;
-
-export const staffApi = {
-  getAll:       (nurseryId, params) => api.get(base(nurseryId), { params }),
-  getById:      (nurseryId, id) => api.get(`${base(nurseryId)}/${id}`),
-  create:       (nurseryId, data) => api.post(base(nurseryId), data),
-  update:       (nurseryId, id, data) => api.patch(`${base(nurseryId)}/${id}`, data),
-  changeRole:   (nurseryId, id, role) => api.patch(`${base(nurseryId)}/${id}/role`, { role }),
-  toggleStatus: (nurseryId, id) => api.patch(`${base(nurseryId)}/${id}/status`),
-};
-```
+- Методы по сущности `staff` описываются в `src/stores/staff.store.js`.
+- Отдельные API-файлы в `src/api/*` не создаются.
+- API-ошибки обрабатываются через `try/catch` в actions store.
 
 ---
 
@@ -31,7 +18,7 @@ export const staffApi = {
 
 ```js
 import { defineStore } from 'pinia';
-import { staffApi } from '@/api/staff.api.js';
+import http from '@/services/http.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 
 export const useStaffStore = defineStore('staff', {

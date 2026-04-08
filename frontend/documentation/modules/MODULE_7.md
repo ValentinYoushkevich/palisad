@@ -4,29 +4,11 @@
 
 ---
 
-## Шаг 1. API
+## Шаг 1. Правило слоя Store
 
-`src/api/plants.api.js`:
-
-```js
-import api from '@/api/index.js';
-
-const base = (nurseryId) => `/nurseries/${nurseryId}/plants`;
-
-export const plantsApi = {
-  getAll:        (nurseryId, params) => api.get(base(nurseryId), { params }),
-  getById:       (nurseryId, id) => api.get(`${base(nurseryId)}/${id}`),
-  getByQr:       (nurseryId, qrCode) => api.get(`${base(nurseryId)}/by-qr/${qrCode}`),
-  getByCode:     (nurseryId, numericCode) => api.get(`${base(nurseryId)}/by-code/${numericCode}`),
-  create:        (nurseryId, data) => api.post(base(nurseryId), data),
-  bulkCreate:    (nurseryId, data) => api.post(`${base(nurseryId)}/bulk`, data),
-  update:        (nurseryId, id, data) => api.patch(`${base(nurseryId)}/${id}`, data),
-  softDelete:    (nurseryId, id) => api.delete(`${base(nurseryId)}/${id}`),
-  restore:       (nurseryId, id) => api.patch(`${base(nurseryId)}/${id}/restore`),
-  addTag:        (nurseryId, id, tagId) => api.post(`${base(nurseryId)}/${id}/tags/${tagId}`),
-  removeTag:     (nurseryId, id, tagId) => api.delete(`${base(nurseryId)}/${id}/tags/${tagId}`),
-};
-```
+- Методы по `plants` размещаются напрямую в `src/stores/plants.store.js`.
+- `src/api/*` не используется как отдельный слой.
+- API-ошибки обрабатываются в actions store через `try/catch`.
 
 ---
 
@@ -36,7 +18,7 @@ export const plantsApi = {
 
 ```js
 import { defineStore } from 'pinia';
-import { plantsApi } from '@/api/plants.api.js';
+import http from '@/services/http.js';
 import { useNurseryStore } from '@/stores/nursery.store.js';
 import { addToQueue } from '@/db/syncQueue.service.js';
 import { upsertMany } from '@/db/dbUtils.js';
@@ -87,7 +69,7 @@ export const usePlantsStore = defineStore('plants', {
       const nursery = useNurseryStore();
       this.isLoading = true;
       try {
-        const { data } = await plantsApi.getAll(nursery.nurseryId, {
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/plants`, {
           page: this.pagination.page,
           perPage: this.pagination.perPage,
           ...params,
@@ -109,7 +91,7 @@ export const usePlantsStore = defineStore('plants', {
 
     async createPlant(formData) {
       const nursery = useNurseryStore();
-      const { data } = await plantsApi.create(nursery.nurseryId, formData);
+      const { data } = await http.post(`/nurseries/${nursery.nurseryId}/plants`, formData);
       this.plants.unshift(data);
       await upsertMany('plants', [data]);
       return data;
@@ -117,39 +99,39 @@ export const usePlantsStore = defineStore('plants', {
 
     async bulkCreate(template, count) {
       const nursery = useNurseryStore();
-      const { data } = await plantsApi.bulkCreate(nursery.nurseryId, { template, count });
+      const { data } = await http.post(`/nurseries/${nursery.nurseryId}/plants/bulk`, { template, count });
       this.plants.unshift(...data);
       await upsertMany('plants', data);
     },
 
     async updatePlant(id, formData) {
       const nursery = useNurseryStore();
-      const { data } = await plantsApi.update(nursery.nurseryId, id, formData);
+      const { data } = await http.patch(`/nurseries/${nursery.nurseryId}/plants/${id}`, formData);
       updateInList(this.plants, data);
       await upsertMany('plants', [data]);
     },
 
     async softDelete(id) {
       const nursery = useNurseryStore();
-      await plantsApi.softDelete(nursery.nurseryId, id);
+      await http.delete(`/nurseries/${nursery.nurseryId}/plants/${id}`);
       this.plants = this.plants.filter(p => p.id !== id);
     },
 
     async restore(id) {
       const nursery = useNurseryStore();
-      const { data } = await plantsApi.restore(nursery.nurseryId, id);
+      const { data } = await http.patch(`/nurseries/${nursery.nurseryId}/plants/${id}/restore`);
       this.plants.unshift(data);
     },
 
     async addTag(plantId, tagId) {
       const nursery = useNurseryStore();
-      await plantsApi.addTag(nursery.nurseryId, plantId, tagId);
+      await http.post(`/nurseries/${nursery.nurseryId}/plants/${plantId}/tags/${tagId}`);
       await this.refreshPlant(plantId);
     },
 
     async removeTag(plantId, tagId) {
       const nursery = useNurseryStore();
-      await plantsApi.removeTag(nursery.nurseryId, plantId, tagId);
+      await http.delete(`/nurseries/${nursery.nurseryId}/plants/${plantId}/tags/${tagId}`);
       await this.refreshPlant(plantId);
     },
 
@@ -160,7 +142,7 @@ export const usePlantsStore = defineStore('plants', {
 
       if (isOnline.value) {
         const nursery = useNurseryStore();
-        const { data } = await plantsApi.getByQr(nursery.nurseryId, qrCode);
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/plants/by-qr/${qrCode}`);
         return data;
       }
       return null;
@@ -173,7 +155,7 @@ export const usePlantsStore = defineStore('plants', {
 
       if (isOnline.value) {
         const nursery = useNurseryStore();
-        const { data } = await plantsApi.getByCode(nursery.nurseryId, code);
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/plants/by-code/${code}`);
         return data;
       }
       return null;
@@ -181,7 +163,7 @@ export const usePlantsStore = defineStore('plants', {
 
     async refreshPlant(id) {
       const nursery = useNurseryStore();
-      const { data } = await plantsApi.getById(nursery.nurseryId, id);
+      const { data } = await http.get(`/nurseries/${nursery.nurseryId}/plants/${id}`);
       updateInList(this.plants, data);
       await upsertMany('plants', [data]);
     },

@@ -4,21 +4,12 @@
 
 ---
 
-## Шаг 1. API-функции
+## Шаг 1. Правило слоя Store
 
-`src/api/auth.api.js`:
-
-```js
-import api from '@/api/index.js';
-
-export const authApi = {
-  login: (data) => api.post('/auth/login', data),
-  logout: () => api.post('/auth/logout'),
-  refresh: () => api.post('/auth/refresh'),
-  changePassword: (data) => api.post('/auth/change-password', data),
-  register: (data) => api.post('/auth/register', data),
-};
-```
+- Отдельные API-модули в `src/api/*` не создаются.
+- Все HTTP-методы по сущности `auth` реализуются прямо в `src/stores/auth.store.js`.
+- `try/catch` для API-запросов размещается в actions store.
+- UI-слой (страницы/компоненты) не содержит `try/catch` для сетевых запросов и работает через результат actions.
 
 ---
 
@@ -28,7 +19,7 @@ export const authApi = {
 
 ```js
 import { defineStore } from 'pinia';
-import { authApi } from '@/api/auth.api.js';
+import http from '@/services/http.js';
 import { useRouter } from 'vue-router';
 import db from '@/db/indexedDb.js';
 
@@ -53,7 +44,7 @@ export const useAuthStore = defineStore('auth', {
     async login(email, password) {
       this.isLoading = true;
       try {
-        const { data } = await authApi.login({ email, password });
+        const { data } = await http.post('/auth/login', { email, password });
         this.user = data.user;
 
         if (data.mustChangePassword) {
@@ -67,7 +58,7 @@ export const useAuthStore = defineStore('auth', {
 
     async logout() {
       try {
-        await authApi.logout();
+        await http.post('/auth/logout');
       } finally {
         this.user = null;
         await clearLocalDb();
@@ -76,7 +67,7 @@ export const useAuthStore = defineStore('auth', {
 
     async initAuth() {
       try {
-        const { data } = await authApi.refresh();
+        const { data } = await http.post('/auth/refresh');
         this.user = data.user;
       } catch {
         this.user = null;
@@ -86,7 +77,7 @@ export const useAuthStore = defineStore('auth', {
     async changePassword(currentPassword, newPassword) {
       this.isLoading = true;
       try {
-        await authApi.changePassword({ currentPassword, newPassword });
+        await http.post('/auth/change-password', { currentPassword, newPassword });
         if (this.user) {
           this.user = { ...this.user, mustChangePassword: false };
         }
