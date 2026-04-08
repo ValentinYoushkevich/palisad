@@ -1,5 +1,6 @@
 import { authApi } from '@/api/auth.api'
 import db from '@/db/indexedDb'
+import { useNurseryStore } from '@/stores/nursery.store'
 import { defineStore } from 'pinia'
 
 const ACCESS_TOKEN_KEY = 'accessToken'
@@ -109,10 +110,13 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async logout() {
+      const nurseryStore = useNurseryStore()
+
       try {
         await authApi.logout()
       } finally {
         this.clearSession()
+        nurseryStore.resetState()
         await clearLocalDb()
       }
     },

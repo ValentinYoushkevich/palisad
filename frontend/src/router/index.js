@@ -1,7 +1,10 @@
 import HomePage from '@/pages/home/HomePage.vue'
 import ChangePasswordPage from '@/pages/login/ChangePasswordPage.vue'
 import LoginPage from '@/pages/login/LoginPage.vue'
+import CreateNurseryPage from '@/pages/nursery/CreateNurseryPage.vue'
+import NurserySettingsPage from '@/pages/nursery/NurserySettingsPage.vue'
 import { useAuthStore } from '@/stores/auth.store'
+import { useNurseryStore } from '@/stores/nursery.store'
 import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
@@ -30,6 +33,22 @@ const routes = [
     }
   },
   {
+    path: '/nursery/create',
+    name: 'nursery-create',
+    component: CreateNurseryPage,
+    meta: {
+      public: false
+    }
+  },
+  {
+    path: '/nursery/settings',
+    name: 'nursery-settings',
+    component: NurserySettingsPage,
+    meta: {
+      public: false
+    }
+  },
+  {
     path: '/',
     redirect: '/plants'
   }
@@ -42,9 +61,11 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const authStore = useAuthStore()
+  const nurseryStore = useNurseryStore()
   const isPublicRoute = Boolean(to.meta.public)
   const isLoginRoute = to.path === '/login'
   const isChangePasswordRoute = to.path === '/change-password'
+  const isNurseryCreateRoute = to.path === '/nursery/create'
 
   if (!authStore.isAuthenticated) {
     await authStore.initAuth()
@@ -62,6 +83,16 @@ router.beforeEach(async (to) => {
   if (authStore.isAuthenticated) {
     if (authStore.mustChangePassword && !isChangePasswordRoute) {
       return { path: '/change-password' }
+    }
+
+    await nurseryStore.initNurseryContext()
+
+    if (!nurseryStore.nursery && !isNurseryCreateRoute) {
+      return { path: '/nursery/create' }
+    }
+
+    if (nurseryStore.nursery && isNurseryCreateRoute) {
+      return { path: '/plants' }
     }
 
     if (isLoginRoute) {
