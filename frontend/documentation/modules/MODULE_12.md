@@ -12,6 +12,10 @@ Sync manager для обработки `sync_queue` и статусов синх
 4. При `retries >= 3` показывать toast.
 5. Conflict policy: server-wins + notification.
 6. Компонент `SyncStatusBadge.vue`.
+7. Обрабатывать элементы `sync_queue`, добавленные в MODULE_8 и MODULE_9:
+   - `create_operation`, `update_operation`, `delete_operation`
+   - `create_movement`, `delete_movement`
+   - `attach_photo` (после operations/movements)
 
 ## Критерии приемки
 - После возврата online очередь обрабатывается.

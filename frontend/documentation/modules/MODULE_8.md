@@ -10,6 +10,11 @@ Plant operations timeline и photo attachments, включая offline queue.
 2. UI: `OperationCreateDialog`, `OperationEditDialog`, `PhotoUploadDialog`, `OperationTimeline`.
 3. `transplant` передает `newContainerId` и обновляет `plants.container_id`.
 4. Feature checks: `feature_operations`, `feature_photos`.
+5. Подключить `syncQueue.service` к CRUD-мутациям в `operations.store.js`:
+   - `create` -> `create_operation`
+   - `update` -> `update_operation`
+   - `softDelete` -> `delete_operation`
+   - `attachPhoto` -> `attach_photo`
 
 ## Backend contracts
 - Operations endpoints + photos endpoints.

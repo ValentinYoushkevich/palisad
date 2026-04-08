@@ -10,6 +10,9 @@ Movements accounting на базе `movement_types` и `sets_status`.
 2. `MovementCreateDialog`, `MovementHistory`.
 3. Выбор `typeId` из movement types.
 4. После записи обновлять `plants.status` и `plants.location_id`.
+5. Подключить `syncQueue.service` к CRUD-мутациям в `movements.store.js`:
+   - `createMovement` -> `create_movement`
+   - `deleteMovement` -> `delete_movement`
 
 ## Backend contracts
 - Movements endpoints.
