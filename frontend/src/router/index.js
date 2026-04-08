@@ -1,4 +1,5 @@
 import HomePage from '@/pages/home/HomePage.vue'
+import LocationsPage from '@/pages/locations/LocationsPage.vue'
 import ChangePasswordPage from '@/pages/login/ChangePasswordPage.vue'
 import LoginPage from '@/pages/login/LoginPage.vue'
 import CreateNurseryPage from '@/pages/nursery/CreateNurseryPage.vue'
@@ -31,6 +32,14 @@ const routes = [
     component: ChangePasswordPage,
     meta: {
       public: true
+    }
+  },
+  {
+    path: '/locations',
+    name: 'locations',
+    component: LocationsPage,
+    meta: {
+      public: false
     }
   },
   {
