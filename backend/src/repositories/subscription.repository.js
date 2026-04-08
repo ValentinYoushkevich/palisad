@@ -28,3 +28,22 @@ export function getActiveWithPlan(accountId) {
     .orderBy('subscriptions.created_at', 'desc')
     .first();
 }
+
+export function getAllPlans() {
+  return db('plans').where({ is_active: true }).orderBy('created_at', 'asc');
+}
+
+export function cancelActive(accountId) {
+  return db('subscriptions')
+    .where({ account_id: accountId })
+    .whereIn('status', ['trial', 'active'])
+    .update({
+      status: 'cancelled',
+      cancelled_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    });
+}
+
+export function getPlanById(id) {
+  return db('plans').where({ id, is_active: true }).first();
+}

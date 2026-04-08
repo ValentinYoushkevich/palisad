@@ -5,11 +5,14 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
+import * as subscriptionController from '@/controllers/subscription.controller.js';
 import errorHandler from '@/middlewares/errorHandler.js';
+import { requireAuth } from '@/middlewares/requireAuth.js';
 import authRouter from '@/routes/auth.router.js';
 import healthRouter from '@/routes/health.router.js';
 import nurseryRouter from '@/routes/nursery.router.js';
 import staffRouter from '@/routes/staff.router.js';
+import subscriptionRouter from '@/routes/subscription.router.js';
 
 const app = express();
 
@@ -28,6 +31,8 @@ app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/nurseries', nurseryRouter);
 app.use('/api/nurseries/:nurseryId/users', staffRouter);
+app.use('/api/subscriptions', subscriptionRouter);
+app.get('/api/plans', requireAuth, subscriptionController.getPlans);
 
 app.use(errorHandler);
 
