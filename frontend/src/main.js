@@ -15,6 +15,11 @@ import { createApp } from 'vue'
 const app = createApp(App)
 const pinia = createPinia()
 
+// Разрешить регистрацию service worker в dev-режиме (для отладки offline/cache).
+const SW_ENABLE_IN_DEV = false
+// Включить подробные логи service worker в консоли браузера.
+const SW_DEBUG = false
+
 app.use(pinia)
 app.use(router)
 app.use(PrimeVue)
@@ -24,4 +29,7 @@ app.use(ConfirmationService)
 app.mount('#app')
 
 http.get('/health').catch(() => {})
-registerServiceWorker()
+registerServiceWorker({
+  enableInDev: SW_ENABLE_IN_DEV,
+  debug: SW_DEBUG
+})

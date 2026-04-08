@@ -42,7 +42,7 @@ async function refreshAccessToken() {
 
 function logoutAndRedirect() {
   const authStore = useAuthStore()
-  authStore.clearTokens()
+  authStore.clearSession()
   window.location.href = '/login'
 }
 
