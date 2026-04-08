@@ -44,3 +44,5 @@
 | 5 | `movements` использует `type_id` | FK на `movement_types(id)` |
 | 6 | Seeds создают системные типы движений и контейнеров | Проверка данных после `npm run seed` |
 | 7 | Rollback и повторный migrate проходят без ошибок | `npm run migrate:rollback && npm run migrate` |
+
+Реализовано
