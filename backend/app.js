@@ -13,6 +13,7 @@ import dictionaryRouter from '@/routes/dictionary.router.js';
 import healthRouter from '@/routes/health.router.js';
 import locationRouter from '@/routes/location.router.js';
 import nurseryRouter from '@/routes/nursery.router.js';
+import plantRouter from '@/routes/plant.router.js';
 import staffRouter from '@/routes/staff.router.js';
 import subscriptionRouter from '@/routes/subscription.router.js';
 
@@ -34,6 +35,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/nurseries', nurseryRouter);
 app.use('/api/nurseries/:nurseryId/users', staffRouter);
 app.use('/api/nurseries/:nurseryId/locations', locationRouter);
+app.use('/api/nurseries/:nurseryId/plants', plantRouter);
 app.use('/api/nurseries/:nurseryId', dictionaryRouter);
 app.use('/api/subscriptions', subscriptionRouter);
 app.get('/api/plans', requireAuth, subscriptionController.getPlans);
