@@ -2,7 +2,10 @@
   <div class="layout">
     <header class="layout__header">
       <h1 class="layout__title">Palisad</h1>
-      <router-link class="layout__link" to="/">Home</router-link>
+      <div class="layout__links">
+        <router-link class="layout__link" to="/plants">Home</router-link>
+        <router-link v-if="authStore.canManageStaff" class="layout__link" to="/staff">Staff</router-link>
+      </div>
     </header>
     <main class="layout__content">
       <slot />
@@ -11,7 +14,11 @@
 </template>
 
 <script setup>
+import { useAuthStore } from '@/stores/auth.store';
+
 defineOptions({ name: 'AppLayout' })
+
+const authStore = useAuthStore()
 </script>
 
 <style lang="scss" scoped>
@@ -39,6 +46,12 @@ defineOptions({ name: 'AppLayout' })
 .layout__link {
   color: #f9fafb;
   text-decoration: none;
+}
+
+.layout__links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .layout__content {

@@ -3,6 +3,7 @@ import ChangePasswordPage from '@/pages/login/ChangePasswordPage.vue'
 import LoginPage from '@/pages/login/LoginPage.vue'
 import CreateNurseryPage from '@/pages/nursery/CreateNurseryPage.vue'
 import NurserySettingsPage from '@/pages/nursery/NurserySettingsPage.vue'
+import StaffPage from '@/pages/staff/StaffPage.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { createRouter, createWebHistory } from 'vue-router'
@@ -44,6 +45,14 @@ const routes = [
     path: '/nursery/settings',
     name: 'nursery-settings',
     component: NurserySettingsPage,
+    meta: {
+      public: false
+    }
+  },
+  {
+    path: '/staff',
+    name: 'staff',
+    component: StaffPage,
     meta: {
       public: false
     }
