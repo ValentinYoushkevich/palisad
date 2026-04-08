@@ -1,10 +1,11 @@
 import CatalogPage from '@/pages/catalog/CatalogPage.vue'
-import HomePage from '@/pages/home/HomePage.vue'
 import LocationsPage from '@/pages/locations/LocationsPage.vue'
 import ChangePasswordPage from '@/pages/login/ChangePasswordPage.vue'
 import LoginPage from '@/pages/login/LoginPage.vue'
 import CreateNurseryPage from '@/pages/nursery/CreateNurseryPage.vue'
 import NurserySettingsPage from '@/pages/nursery/NurserySettingsPage.vue'
+import PlantDetailPage from '@/pages/plants/PlantDetailPage.vue'
+import PlantsPage from '@/pages/plants/PlantsPage.vue'
 import StaffPage from '@/pages/staff/StaffPage.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useNurseryStore } from '@/stores/nursery.store'
@@ -16,7 +17,15 @@ const routes = [
   {
     path: '/plants',
     name: 'plants',
-    component: HomePage,
+    component: PlantsPage,
+    meta: {
+      public: false
+    }
+  },
+  {
+    path: '/plants/:id',
+    name: 'plant-detail',
+    component: PlantDetailPage,
     meta: {
       public: false
     }
