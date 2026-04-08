@@ -6,11 +6,11 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const routes = [
   {
-    path: '/',
-    name: 'home',
+    path: '/plants',
+    name: 'plants',
     component: HomePage,
     meta: {
-      requireAuth: true
+      public: false
     }
   },
   {
@@ -18,7 +18,7 @@ const routes = [
     name: 'login',
     component: LoginPage,
     meta: {
-      requireAuth: false
+      public: true
     }
   },
   {
@@ -26,8 +26,12 @@ const routes = [
     name: 'change-password',
     component: ChangePasswordPage,
     meta: {
-      requireAuth: true
+      public: true
     }
+  },
+  {
+    path: '/',
+    redirect: '/plants'
   }
 ]
 
@@ -36,30 +40,32 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const authStore = useAuthStore()
-  const requiresAuth = Boolean(to.meta.requireAuth)
+  const isPublicRoute = Boolean(to.meta.public)
   const isLoginRoute = to.path === '/login'
   const isChangePasswordRoute = to.path === '/change-password'
 
-  if (authStore.isAuthorized) {
-    if (authStore.mustChangePassword && !isChangePasswordRoute) {
-      return { path: '/change-password' }
-    }
-
-    if (isLoginRoute) {
-      return { path: '/' }
-    }
-
-    return true
+  if (!authStore.isAuthenticated) {
+    await authStore.initAuth()
   }
 
-  if (requiresAuth) {
+  if (!isPublicRoute && !authStore.isAuthenticated) {
     return {
       path: '/login',
       query: {
         redirect: to.fullPath
       }
+    }
+  }
+
+  if (authStore.isAuthenticated) {
+    if (authStore.mustChangePassword && !isChangePasswordRoute) {
+      return { path: '/change-password' }
+    }
+
+    if (isLoginRoute) {
+      return { path: '/plants' }
     }
   }
 

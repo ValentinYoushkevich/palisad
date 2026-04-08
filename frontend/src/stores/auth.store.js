@@ -1,5 +1,5 @@
-import http from '@/services/http'
-import axios from 'axios'
+import { authApi } from '@/api/auth.api'
+import db from '@/db/indexedDb'
 import { defineStore } from 'pinia'
 
 const ACCESS_TOKEN_KEY = 'accessToken'
@@ -33,16 +33,22 @@ export const useAuthStore = defineStore('auth', {
   state: () => ({
     accessToken: localStorage.getItem(ACCESS_TOKEN_KEY) || '',
     refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) || '',
-    user: parseStoredUser()
+    user: parseStoredUser(),
+    isLoading: false,
+    isAuthInitialized: false
   }),
   getters: {
+    isAuthenticated: (state) => Boolean(state.user),
     isAuthorized: (state) => Boolean(state.accessToken),
     role: (state) => state.user?.role || '',
-    mustChangePassword: (state) => Boolean(state.user?.must_change_password),
+    mustChangePassword: (state) => Boolean(state.user?.mustChangePassword || state.user?.must_change_password),
     isOwner: (state) => state.user?.role === ROLE_OWNER,
     isAgronomist: (state) => state.user?.role === ROLE_AGRONOMIST,
     isWorker: (state) => state.user?.role === ROLE_WORKER,
-    isObserver: (state) => state.user?.role === ROLE_OBSERVER
+    isObserver: (state) => state.user?.role === ROLE_OBSERVER,
+    canWrite: (state) => [ROLE_OWNER, ROLE_AGRONOMIST, ROLE_WORKER].includes(state.user?.role),
+    canManageStructure: (state) => [ROLE_OWNER, ROLE_AGRONOMIST].includes(state.user?.role),
+    canManageStaff: (state) => state.user?.role === ROLE_OWNER
   },
   actions: {
     setUser(user) {
@@ -73,46 +79,117 @@ export const useAuthStore = defineStore('auth', {
     clearTokens() {
       this.setTokens('', '')
     },
-    async login(credentials) {
-      const response = await axios.post('/api/auth/login', credentials)
-      const accessToken = response?.data?.accessToken || ''
-      const refreshToken = response?.data?.refreshToken || ''
-      const user = response?.data?.user || null
+    async login(email, password) {
+      this.isLoading = true
 
-      if (!accessToken || !refreshToken || !user) {
-        throw new Error('Invalid login response')
+      try {
+        const response = await authApi.login({
+          email,
+          password
+        })
+        const accessToken = response?.data?.accessToken || ''
+        const refreshToken = response?.data?.refreshToken || ''
+        const user = response?.data?.user || null
+
+        if (!accessToken || !refreshToken || !user) {
+          throw new Error('Invalid login response')
+        }
+
+        this.setTokens(accessToken, refreshToken)
+        this.setUser(user)
+        this.isAuthInitialized = true
+
+        if (this.mustChangePassword) {
+          return { redirect: '/change-password' }
+        }
+
+        return { redirect: '/plants' }
+      } finally {
+        this.isLoading = false
       }
-
-      this.setTokens(accessToken, refreshToken)
-      this.setUser(user)
-      return user
     },
     async logout() {
       try {
-        await http.post('/auth/logout')
+        await authApi.logout()
       } finally {
-        this.clearTokens()
-        this.setUser(null)
+        this.clearSession()
+        await clearLocalDb()
       }
     },
-    async changePassword(payload) {
-      const response = await http.post('/auth/change-password', payload)
-      const nextUser = response?.data?.user || null
-
-      if (nextUser) {
-        this.setUser(nextUser)
-      } else if (this.user) {
-        this.setUser({
-          ...this.user,
-          must_change_password: false
-        })
+    async initAuth() {
+      if (this.isAuthInitialized) {
+        return
       }
 
-      return response?.data || null
+      try {
+        const response = await authApi.refresh()
+        const accessToken = response?.data?.accessToken || ''
+        const refreshToken = response?.data?.refreshToken || ''
+        const user = response?.data?.user || null
+
+        if (accessToken && refreshToken && user) {
+          this.setTokens(accessToken, refreshToken)
+          this.setUser(user)
+          return
+        }
+
+        this.clearSession()
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn('initAuth failed', error)
+        }
+        this.clearSession()
+      } finally {
+        this.isAuthInitialized = true
+      }
+    },
+    async changePassword(currentPassword, newPassword) {
+      this.isLoading = true
+
+      try {
+        const response = await authApi.changePassword({
+          currentPassword,
+          newPassword
+        })
+        const nextUser = response?.data?.user || null
+
+        if (nextUser) {
+          this.setUser(nextUser)
+          return
+        }
+
+        if (this.user) {
+          this.setUser({
+            ...this.user,
+            mustChangePassword: false,
+            must_change_password: false
+          })
+        }
+      } finally {
+        this.isLoading = false
+      }
     },
     clearSession() {
       this.clearTokens()
       this.setUser(null)
+      this.isAuthInitialized = false
     }
   }
 })
+
+async function clearLocalDb() {
+  const tables = [
+    'plants',
+    'locations',
+    'species',
+    'tags',
+    'movement_types',
+    'container_types',
+    'operations',
+    'movements',
+    'pending_photos',
+    'sync_queue'
+  ]
+
+  await Promise.all(tables.map((tableName) => db.table(tableName).clear()))
+}

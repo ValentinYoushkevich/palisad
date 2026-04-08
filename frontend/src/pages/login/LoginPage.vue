@@ -15,7 +15,7 @@
 
     <Message v-if="errorText" severity="error">{{ errorText }}</Message>
 
-    <Button :loading="isLoading" label="Sign in" @click="submitLogin" />
+    <Button :loading="authStore.isLoading" label="Sign in" @click="submitLogin" />
   </section>
 </template>
 
@@ -33,17 +33,9 @@ defineOptions({ name: 'LoginPage' })
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const isLoading = ref(false)
 const errorText = ref('')
 const email = ref('')
 const password = ref('')
-
-function getRedirectPath(user) {
-  if (user?.must_change_password) {
-    return '/change-password'
-  }
-  return route.query.redirect || '/'
-}
 
 async function submitLogin() {
   errorText.value = ''
@@ -53,21 +45,15 @@ async function submitLogin() {
     return
   }
 
-  isLoading.value = true
-
   try {
-    const user = await authStore.login({
-      email: email.value,
-      password: password.value
-    })
-    await router.push(getRedirectPath(user))
+    const result = await authStore.login(email.value, password.value)
+    const redirectTo = route.query.redirect || result.redirect
+    await router.push(redirectTo)
   } catch (error) {
     if (import.meta.env.DEV) {
       console.warn('Login failed', error)
     }
     errorText.value = 'Не удалось выполнить вход. Проверьте данные.'
-  } finally {
-    isLoading.value = false
   }
 }
 </script>

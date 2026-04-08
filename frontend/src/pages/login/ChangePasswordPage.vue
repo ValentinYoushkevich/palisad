@@ -18,13 +18,18 @@
       <Password id="newPassword" v-model="newPassword" toggleMask />
     </div>
 
+    <div class="changePassword__field">
+      <label for="confirmPassword">Confirm password</label>
+      <Password id="confirmPassword" v-model="confirmPassword" :feedback="false" toggleMask />
+    </div>
+
     <Message v-if="errorText" severity="error">{{ errorText }}</Message>
     <Message v-if="successText" severity="success">{{ successText }}</Message>
 
     <div class="changePassword__actions">
-      <Button :loading="isSaving" label="Save new password" @click="submitChangePassword" />
+      <Button :loading="authStore.isLoading" label="Save new password" @click="submitChangePassword" />
       <Button
-        :disabled="isSaving"
+        :disabled="authStore.isLoading"
         label="Logout"
         severity="secondary"
         outlined
@@ -46,11 +51,11 @@ defineOptions({ name: 'ChangePasswordPage' })
 
 const router = useRouter()
 const authStore = useAuthStore()
-const isSaving = ref(false)
 const errorText = ref('')
 const successText = ref('')
 const currentPassword = ref('')
 const newPassword = ref('')
+const confirmPassword = ref('')
 
 async function logout() {
   await authStore.logout()
@@ -66,22 +71,20 @@ async function submitChangePassword() {
     return
   }
 
-  isSaving.value = true
+  if (newPassword.value !== confirmPassword.value) {
+    errorText.value = 'Пароли не совпадают.'
+    return
+  }
 
   try {
-    await authStore.changePassword({
-      currentPassword: currentPassword.value,
-      newPassword: newPassword.value
-    })
-    successText.value = 'Пароль обновлен. Перенаправляем на главную...'
-    await router.push('/')
+    await authStore.changePassword(currentPassword.value, newPassword.value)
+    successText.value = 'Пароль обновлен. Перенаправляем на страницу растений...'
+    await router.push('/plants')
   } catch (error) {
     if (import.meta.env.DEV) {
       console.warn('Change password failed', error)
     }
     errorText.value = 'Не удалось обновить пароль.'
-  } finally {
-    isSaving.value = false
   }
 }
 </script>
