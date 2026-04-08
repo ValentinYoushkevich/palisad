@@ -1,6 +1,8 @@
+import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { ROLES } from '@/constants/roles.constants.js';
 import * as plantRepo from '@/repositories/plant.repository.js';
 import { AppError } from '@/utils/AppError.js';
+import { logActivity } from '@/utils/logActivity.js';
 import { checkFeature, checkLimit } from '@/utils/planGuards.js';
 import { generateQrCode } from '@/utils/qrCode.js';
 
@@ -41,13 +43,13 @@ export async function findByNumericCode(nurseryId, numericCode) {
   return plant;
 }
 
-export async function createPlant(nurseryId, accountId, data) {
+export async function createPlant(nurseryId, accountId, data, userId) {
   const count = await plantRepo.countByNursery(nurseryId);
   await checkLimit(accountId, 'plant_limit', count);
 
   const qrCode = generateQrCode();
   const numericCode = await generateUniqueNumericCode();
-  return plantRepo.create({
+  const plant = await plantRepo.create({
     nursery_id: nurseryId,
     species_id: data.speciesId ?? null,
     location_id: data.locationId ?? null,
@@ -59,6 +61,15 @@ export async function createPlant(nurseryId, accountId, data) {
     qr_code: qrCode,
     numeric_code: numericCode,
   });
+  await logActivity({
+    nurseryId,
+    userId,
+    eventType: EVENT_TYPES.PLANT_CREATED,
+    entityType: ENTITY_TYPES.PLANT,
+    entityId: plant.id,
+    details: { qr_code: plant.qr_code },
+  });
+  return plant;
 }
 
 export async function bulkCreate(nurseryId, accountId, template, count) {
@@ -84,9 +95,9 @@ export async function bulkCreate(nurseryId, accountId, template, count) {
   return plantRepo.bulkCreate(records);
 }
 
-export async function updatePlant(nurseryId, id, data) {
+export async function updatePlant(nurseryId, id, data, userId) {
   await requirePlant(nurseryId, id);
-  return plantRepo.updateById(id, {
+  const plant = await plantRepo.updateById(id, {
     species_id: data.speciesId ?? null,
     location_id: data.locationId ?? null,
     container_id: data.containerId ?? null,
@@ -95,11 +106,29 @@ export async function updatePlant(nurseryId, id, data) {
     source: data.source ?? null,
     notes: data.notes ?? null,
   });
+  await logActivity({
+    nurseryId,
+    userId,
+    eventType: EVENT_TYPES.PLANT_UPDATED,
+    entityType: ENTITY_TYPES.PLANT,
+    entityId: id,
+    details: null,
+  });
+  return plant;
 }
 
-export async function softDelete(nurseryId, id) {
+export async function softDelete(nurseryId, id, userId) {
   await requirePlant(nurseryId, id);
-  return plantRepo.softDelete(id);
+  const plant = await plantRepo.softDelete(id);
+  await logActivity({
+    nurseryId,
+    userId,
+    eventType: EVENT_TYPES.PLANT_DELETED,
+    entityType: ENTITY_TYPES.PLANT,
+    entityId: id,
+    details: null,
+  });
+  return plant;
 }
 
 export async function restore(nurseryId, id, user) {
@@ -107,12 +136,21 @@ export async function restore(nurseryId, id, user) {
     throw new AppError('Только владелец может восстанавливать растения', 403);
   }
 
-  const plant = await plantRepo.findById(id);
-  if (!plant || plant.nursery_id !== nurseryId) {
+  const existingPlant = await plantRepo.findById(id);
+  if (!existingPlant || existingPlant.nursery_id !== nurseryId) {
     throw new AppError('Растение не найдено', 404);
   }
 
-  return plantRepo.restore(id);
+  const plant = await plantRepo.restore(id);
+  await logActivity({
+    nurseryId,
+    userId: user.userId,
+    eventType: EVENT_TYPES.PLANT_RESTORED,
+    entityType: ENTITY_TYPES.PLANT,
+    entityId: id,
+    details: null,
+  });
+  return plant;
 }
 
 export async function addTag(nurseryId, plantId, tagId, accountId) {

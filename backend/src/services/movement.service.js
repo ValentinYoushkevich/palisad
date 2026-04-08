@@ -1,10 +1,18 @@
 import db from '@/config/knex.js';
+import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { STRUCTURE_ROLES } from '@/constants/roles.constants.js';
 import * as movementRepo from '@/repositories/movement.repository.js';
 import * as plantRepo from '@/repositories/plant.repository.js';
 import { AppError } from '@/utils/AppError.js';
+import { logActivity } from '@/utils/logActivity.js';
 
 const CLOSED_STATUSES = ['sold', 'written_off'];
+const EVENT_BY_MOVEMENT_SLUG = {
+  arrival: EVENT_TYPES.MOVEMENT_ARRIVAL,
+  sale: EVENT_TYPES.MOVEMENT_SALE,
+  write_off: EVENT_TYPES.MOVEMENT_WRITE_OFF,
+  transfer: EVENT_TYPES.MOVEMENT_TRANSFER,
+};
 
 export function getMovements(plantId) {
   return movementRepo.findByPlant(plantId);
@@ -37,6 +45,14 @@ export async function createMovement(nurseryId, plantId, userId, data) {
   });
 
   await applyMovementToPlant(plantId, movementType.sets_status, data.toLocationId);
+  await logActivity({
+    nurseryId,
+    userId,
+    eventType: EVENT_BY_MOVEMENT_SLUG[movementType.slug] ?? EVENT_TYPES.MOVEMENT_TRANSFER,
+    entityType: ENTITY_TYPES.MOVEMENT,
+    entityId: movement.id,
+    details: { plant_id: plantId, type: movementType.slug },
+  });
   return movement;
 }
 

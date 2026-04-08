@@ -1,8 +1,10 @@
 import argon2 from 'argon2';
 
+import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import * as subscriptionRepo from '@/repositories/subscription.repository.js';
 import * as userRepo from '@/repositories/user.repository.js';
 import { AppError } from '@/utils/AppError.js';
+import { logActivity } from '@/utils/logActivity.js';
 
 export function getUsers(nurseryId, filters) {
   return userRepo.findAllByNursery(nurseryId, {
@@ -16,11 +18,11 @@ export function getUserById(nurseryId, id) {
   return requireUser(nurseryId, id);
 }
 
-export async function createUser(nurseryId, accountId, data) {
+export async function createUser(nurseryId, accountId, data, actorUserId) {
   await checkUserLimit(nurseryId, accountId);
   const passwordHash = await argon2.hash(data.password);
 
-  return userRepo.create({
+  const user = await userRepo.create({
     nursery_id: nurseryId,
     name: data.name,
     role: data.role,
@@ -29,6 +31,15 @@ export async function createUser(nurseryId, accountId, data) {
     is_active: true,
     must_change_password: true,
   });
+  await logActivity({
+    nurseryId,
+    userId: actorUserId,
+    eventType: EVENT_TYPES.USER_CREATED,
+    entityType: ENTITY_TYPES.USER,
+    entityId: user.id,
+    details: { role: user.role },
+  });
+  return user;
 }
 
 export async function updateUser(nurseryId, id, data) {
@@ -36,18 +47,38 @@ export async function updateUser(nurseryId, id, data) {
   return userRepo.updateById(id, data);
 }
 
-export async function changeRole(nurseryId, id, role) {
+export async function changeRole(nurseryId, id, role, actorUserId) {
   await requireUser(nurseryId, id);
-  return userRepo.updateById(id, { role });
+  const user = await userRepo.updateById(id, { role });
+  await logActivity({
+    nurseryId,
+    userId: actorUserId,
+    eventType: EVENT_TYPES.USER_ROLE_CHANGED,
+    entityType: ENTITY_TYPES.USER,
+    entityId: id,
+    details: { role },
+  });
+  return user;
 }
 
-export async function toggleStatus(nurseryId, id) {
+export async function toggleStatus(nurseryId, id, actorUserId) {
   const user = await requireUser(nurseryId, id);
   if (user.is_active) {
     await guardLastOwner(nurseryId, user);
   }
 
-  return userRepo.updateById(id, { is_active: !user.is_active });
+  const updated = await userRepo.updateById(id, { is_active: !user.is_active });
+  if (!updated.is_active) {
+    await logActivity({
+      nurseryId,
+      userId: actorUserId,
+      eventType: EVENT_TYPES.USER_DEACTIVATED,
+      entityType: ENTITY_TYPES.USER,
+      entityId: id,
+      details: null,
+    });
+  }
+  return updated;
 }
 
 async function requireUser(nurseryId, id) {

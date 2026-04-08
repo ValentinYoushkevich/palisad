@@ -1,5 +1,7 @@
+import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import * as locationRepo from '@/repositories/location.repository.js';
 import { AppError } from '@/utils/AppError.js';
+import { logActivity } from '@/utils/logActivity.js';
 
 const TYPE_LEVEL = {
   area: 0,
@@ -17,17 +19,26 @@ export async function getLocationsTree(nurseryId) {
   return buildTree(locations);
 }
 
-export async function createLocation(nurseryId, data) {
+export async function createLocation(nurseryId, data, userId) {
   await ensureParentValid(nurseryId, data.parentId, data.type);
-  return locationRepo.create({
+  const location = await locationRepo.create({
     nursery_id: nurseryId,
     name: data.name,
     type: data.type,
     parent_id: data.parentId ?? null,
   });
+  await logActivity({
+    nurseryId,
+    userId,
+    eventType: EVENT_TYPES.LOCATION_CREATED,
+    entityType: ENTITY_TYPES.LOCATION,
+    entityId: location.id,
+    details: { type: location.type },
+  });
+  return location;
 }
 
-export async function updateLocation(nurseryId, id, data) {
+export async function updateLocation(nurseryId, id, data, userId) {
   const current = await requireLocation(nurseryId, id);
   const nextType = data.type ?? current.type;
   const nextParentId =
@@ -36,14 +47,23 @@ export async function updateLocation(nurseryId, id, data) {
       current.parent_id;
 
   await ensureParentValid(nurseryId, nextParentId, nextType, id);
-  return locationRepo.updateById(id, {
+  const location = await locationRepo.updateById(id, {
     name: data.name ?? current.name,
     type: nextType,
     parent_id: nextParentId ?? null,
   });
+  await logActivity({
+    nurseryId,
+    userId,
+    eventType: EVENT_TYPES.LOCATION_UPDATED,
+    entityType: ENTITY_TYPES.LOCATION,
+    entityId: id,
+    details: { type: location.type },
+  });
+  return location;
 }
 
-export async function deleteLocation(nurseryId, id) {
+export async function deleteLocation(nurseryId, id, userId) {
   await requireLocation(nurseryId, id);
 
   const childrenCount = await locationRepo.countChildren(id);
@@ -57,6 +77,14 @@ export async function deleteLocation(nurseryId, id) {
   }
 
   await locationRepo.deleteById(id);
+  await logActivity({
+    nurseryId,
+    userId,
+    eventType: EVENT_TYPES.LOCATION_DELETED,
+    entityType: ENTITY_TYPES.LOCATION,
+    entityId: id,
+    details: null,
+  });
 }
 
 async function requireLocation(nurseryId, id) {

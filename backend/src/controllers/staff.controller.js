@@ -23,7 +23,8 @@ export async function createUser(req, res, next) {
     const user = await staffService.createUser(
       req.params.nurseryId,
       req.user.accountId,
-      req.body
+      req.body,
+      req.user.userId
     );
     return res.status(201).json(user);
   } catch (err) {
@@ -49,7 +50,8 @@ export async function changeRole(req, res, next) {
     const user = await staffService.changeRole(
       req.params.nurseryId,
       req.params.id,
-      req.body.role
+      req.body.role,
+      req.user.userId
     );
     return res.json(user);
   } catch (err) {
@@ -59,7 +61,11 @@ export async function changeRole(req, res, next) {
 
 export async function toggleStatus(req, res, next) {
   try {
-    const user = await staffService.toggleStatus(req.params.nurseryId, req.params.id);
+    const user = await staffService.toggleStatus(
+      req.params.nurseryId,
+      req.params.id,
+      req.user.userId
+    );
     return res.json(user);
   } catch (err) {
     return next(err);

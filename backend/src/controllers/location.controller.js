@@ -22,7 +22,8 @@ export async function createLocation(req, res, next) {
   try {
     const location = await locationService.createLocation(
       req.params.nurseryId,
-      req.body
+      req.body,
+      req.user.userId
     );
     return res.status(201).json(location);
   } catch (err) {
@@ -35,7 +36,8 @@ export async function updateLocation(req, res, next) {
     const location = await locationService.updateLocation(
       req.params.nurseryId,
       req.params.id,
-      req.body
+      req.body,
+      req.user.userId
     );
     return res.json(location);
   } catch (err) {
@@ -45,7 +47,11 @@ export async function updateLocation(req, res, next) {
 
 export async function deleteLocation(req, res, next) {
   try {
-    await locationService.deleteLocation(req.params.nurseryId, req.params.id);
+    await locationService.deleteLocation(
+      req.params.nurseryId,
+      req.params.id,
+      req.user.userId
+    );
     return res.status(204).send();
   } catch (err) {
     return next(err);

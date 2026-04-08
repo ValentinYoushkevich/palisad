@@ -1,5 +1,6 @@
 import argon2 from 'argon2';
 
+import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import {
   ACCESS_TTL_MS,
   COOKIE_ACCESS,
@@ -16,6 +17,7 @@ import {
   signRefresh,
   verifyRefresh,
 } from '@/utils/jwt.js';
+import { logActivity } from '@/utils/logActivity.js';
 
 export async function register(data) {
   const existing = await accountRepo.findByEmail(data.email);
@@ -66,6 +68,17 @@ export async function login(email, password, res) {
   const accessToken = signAccess(payload);
   const refreshToken = signRefresh({ accountId: account.id });
   setTokenCookies(res, accessToken, refreshToken);
+
+  if (user?.nursery_id) {
+    await logActivity({
+      nurseryId: user.nursery_id,
+      userId: user.id,
+      eventType: EVENT_TYPES.AUTH_LOGIN,
+      entityType: ENTITY_TYPES.USER,
+      entityId: user.id,
+      details: { accountId: account.id },
+    });
+  }
 
   return { mustChangePassword: user?.must_change_password ?? false };
 }

@@ -1,5 +1,6 @@
 import db from '@/config/knex.js';
 import logger from '@/config/logger.js';
+import { startCleanupCron } from '@/utils/cleanupCron.js';
 import 'dotenv/config';
 import app from './app.js';
 
@@ -12,6 +13,8 @@ async function start() {
 
     app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);
+      startCleanupCron();
+      logger.info('Cleanup cron started');
     });
   } catch (err) {
     logger.error('Failed to connect to DB', { error: err.message });

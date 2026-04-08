@@ -46,7 +46,8 @@ export async function createPlant(req, res, next) {
       await plantService.createPlant(
         req.params.nurseryId,
         req.user.accountId,
-        req.body
+        req.body,
+        req.user.userId
       )
     );
   } catch (err) {
@@ -73,7 +74,12 @@ export async function bulkCreate(req, res, next) {
 export async function updatePlant(req, res, next) {
   try {
     return res.json(
-      await plantService.updatePlant(req.params.nurseryId, req.params.id, req.body)
+      await plantService.updatePlant(
+        req.params.nurseryId,
+        req.params.id,
+        req.body,
+        req.user.userId
+      )
     );
   } catch (err) {
     return next(err);
@@ -82,7 +88,13 @@ export async function updatePlant(req, res, next) {
 
 export async function softDelete(req, res, next) {
   try {
-    return res.json(await plantService.softDelete(req.params.nurseryId, req.params.id));
+    return res.json(
+      await plantService.softDelete(
+        req.params.nurseryId,
+        req.params.id,
+        req.user.userId
+      )
+    );
   } catch (err) {
     return next(err);
   }

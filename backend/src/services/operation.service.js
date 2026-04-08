@@ -1,8 +1,10 @@
+import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { CLOSED_STATUSES } from '@/constants/operation.constants.js';
 import * as operationRepo from '@/repositories/operation.repository.js';
 import * as photoRepo from '@/repositories/photo.repository.js';
 import * as plantRepo from '@/repositories/plant.repository.js';
 import { AppError } from '@/utils/AppError.js';
+import { logActivity } from '@/utils/logActivity.js';
 import { checkFeature } from '@/utils/planGuards.js';
 
 export function getOperations(plantId) {
@@ -36,12 +38,21 @@ export async function createOperation({
     await plantRepo.updateById(plant.id, { container_id: data.newContainerId });
   }
 
-  return operationRepo.create({
+  const operation = await operationRepo.create({
     plant_id: plantId,
     user_id: userId,
     type: data.type,
     notes: data.notes ?? null,
   });
+  await logActivity({
+    nurseryId,
+    userId,
+    eventType: EVENT_TYPES.OPERATION_CREATED,
+    entityType: ENTITY_TYPES.OPERATION,
+    entityId: operation.id,
+    details: { type: data.type },
+  });
+  return operation;
 }
 
 export async function updateOperation(plantId, id, userId, data) {
@@ -61,13 +72,37 @@ export async function softDelete(plantId, id, userId, userRole) {
     throw new AppError('Нет прав на удаление этой операции', 403);
   }
 
-  return operationRepo.softDelete(id);
+  await operationRepo.softDelete(id);
+  const plant = await plantRepo.findById(plantId);
+  if (plant) {
+    await logActivity({
+      nurseryId: plant.nursery_id,
+      userId,
+      eventType: EVENT_TYPES.OPERATION_DELETED,
+      entityType: ENTITY_TYPES.OPERATION,
+      entityId: id,
+      details: null,
+    });
+  }
+  return true;
 }
 
 export async function attachPhoto(plantId, operationId, accountId, url) {
   await checkFeature(accountId, 'feature_photos');
-  await requireOperation(plantId, operationId);
-  return photoRepo.create({ operation_id: operationId, url });
+  const operation = await requireOperation(plantId, operationId);
+  const photo = await photoRepo.create({ operation_id: operationId, url });
+  const plant = await plantRepo.findById(plantId);
+  if (plant) {
+    await logActivity({
+      nurseryId: plant.nursery_id,
+      userId: operation.user_id,
+      eventType: EVENT_TYPES.PHOTO_ATTACHED,
+      entityType: ENTITY_TYPES.OPERATION,
+      entityId: operationId,
+      details: { photoId: photo.id },
+    });
+  }
+  return photo;
 }
 
 export async function deletePhoto(plantId, operationId, photoId) {
