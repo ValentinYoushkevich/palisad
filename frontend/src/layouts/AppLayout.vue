@@ -3,6 +3,7 @@
     <header class="layout__header">
       <h1 class="layout__title">Palisad</h1>
       <div class="layout__userPanel">
+        <SyncStatusBadge />
         <div class="layout__identity">
           <p class="layout__username">{{ authStore.userDisplayName }}</p>
           <p class="layout__roles">{{ authStore.roleLabels.join(', ') }}</p>
@@ -48,9 +49,11 @@
 </template>
 
 <script setup>
+import SyncStatusBadge from '@/components/SyncStatusBadge.vue'
+import { useSyncManager } from '@/composables/useSyncManager'
 import { useAuthStore } from '@/stores/auth.store'
 import { useNurseryStore } from '@/stores/nursery.store'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 defineOptions({ name: 'AppLayout' })
@@ -58,6 +61,7 @@ defineOptions({ name: 'AppLayout' })
 const authStore = useAuthStore()
 const nurseryStore = useNurseryStore()
 const router = useRouter()
+const { processQueue } = useSyncManager()
 
 const commonNavItems = computed(() => {
   const items = [
@@ -122,6 +126,10 @@ async function handleLogout() {
   await authStore.logout()
   await router.push('/login')
 }
+
+onMounted(() => {
+  processQueue()
+})
 </script>
 
 <style lang="scss" scoped>
