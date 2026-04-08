@@ -1,3 +1,4 @@
+import CatalogPage from '@/pages/catalog/CatalogPage.vue'
 import HomePage from '@/pages/home/HomePage.vue'
 import LocationsPage from '@/pages/locations/LocationsPage.vue'
 import ChangePasswordPage from '@/pages/login/ChangePasswordPage.vue'
@@ -38,6 +39,14 @@ const routes = [
     path: '/locations',
     name: 'locations',
     component: LocationsPage,
+    meta: {
+      public: false
+    }
+  },
+  {
+    path: '/catalog',
+    name: 'catalog',
+    component: CatalogPage,
     meta: {
       public: false
     }

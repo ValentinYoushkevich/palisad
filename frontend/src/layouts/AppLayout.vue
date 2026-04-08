@@ -7,6 +7,7 @@
         <router-link v-if="!nurseryStore.nursery" class="layout__link" to="/nursery/create">Создать питомник</router-link>
         <router-link v-if="nurseryStore.nursery" class="layout__link" to="/nursery/settings">Питомник</router-link>
         <router-link v-if="authStore.canManageStructure" class="layout__link" to="/locations">Локации</router-link>
+        <router-link v-if="authStore.canManageStructure" class="layout__link" to="/catalog">Справочники</router-link>
         <router-link v-if="authStore.canManageStaff" class="layout__link" to="/staff">Сотрудники</router-link>
       </div>
     </header>
