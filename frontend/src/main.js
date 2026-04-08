@@ -11,6 +11,7 @@ import ConfirmationService from 'primevue/confirmationservice'
 import 'primevue/resources/primevue.min.css'
 import 'primevue/resources/themes/lara-light-blue/theme.css'
 import ToastService from 'primevue/toastservice'
+import Tooltip from 'primevue/tooltip'
 import { createApp } from 'vue'
 
 const app = createApp(App)
@@ -26,6 +27,7 @@ app.use(router)
 app.use(PrimeVue)
 app.use(ToastService)
 app.use(ConfirmationService)
+app.directive('tooltip', Tooltip)
 
 db.open().catch((error) => {
   console.error('Dexie open failed:', error)

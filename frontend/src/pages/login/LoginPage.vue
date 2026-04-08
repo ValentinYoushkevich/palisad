@@ -1,21 +1,32 @@
 <template>
-  <section class="login">
-    <h2>Login</h2>
-    <p>Войдите в систему, чтобы продолжить.</p>
+  <section class="loginPage">
+    <form class="loginCard" @submit.prevent="submitLogin">
+      <h1 class="loginCard__title">Palisade</h1>
+      <p class="loginCard__subtitle">Войдите в систему</p>
 
-    <div class="login__field">
-      <label for="email">Email</label>
-      <InputText id="email" v-model="email" type="email" />
-    </div>
+      <div class="loginCard__field">
+        <label for="email">Email</label>
+        <InputText id="email" v-model="email" type="email" autocomplete="username" />
+      </div>
 
-    <div class="login__field">
-      <label for="password">Password</label>
-      <Password id="password" v-model="password" :feedback="false" toggleMask />
-    </div>
+      <div class="loginCard__field">
+        <label for="password">Пароль</label>
+        <Password id="password" v-model="password" :feedback="false" toggleMask :inputProps="{ autocomplete: 'current-password' }" />
+      </div>
 
-    <Message v-if="errorText" severity="error">{{ errorText }}</Message>
+      <Message v-if="errorText" severity="error">{{ errorText }}</Message>
 
-    <Button :loading="authStore.isLoading" label="Sign in" @click="submitLogin" />
+      <Button :loading="authStore.isLoading" label="Войти" type="submit" />
+
+      <button
+        v-tooltip.top="'Функция будет доступна в следующем релизе'"
+        class="loginCard__forgot"
+        type="button"
+        disabled
+      >
+        Забыли пароль?
+      </button>
+    </form>
   </section>
 </template>
 
@@ -41,7 +52,7 @@ async function submitLogin() {
   errorText.value = ''
 
   if (!email.value || !password.value) {
-    errorText.value = 'Введите email и password.'
+    errorText.value = 'Введите email и пароль.'
     return
   }
 
@@ -58,16 +69,59 @@ async function submitLogin() {
 </script>
 
 <style lang="scss" scoped>
-.login {
+.loginPage {
+  min-height: 100vh;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 320px;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #f3f4f6;
 }
 
-.login__field {
+.loginCard {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 8px;
+}
+
+.loginCard__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.loginCard__subtitle {
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.loginCard__field {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.loginCard__field :deep(.p-password) {
+  width: 100%;
+}
+
+.loginCard__field :deep(.p-password-input) {
+  width: 100%;
+}
+
+.loginCard__forgot {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: not-allowed;
+  align-self: center;
 }
 </style>
