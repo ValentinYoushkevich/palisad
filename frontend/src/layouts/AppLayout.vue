@@ -85,6 +85,16 @@ const commonNavItems = computed(() => {
       to: '/catalog',
       label: 'Справочники',
       visible: authStore.isAuthenticated
+    },
+    {
+      to: '/scanner',
+      label: 'Сканер',
+      visible: authStore.isAuthenticated
+    },
+    {
+      to: '/labels',
+      label: 'Этикетки',
+      visible: authStore.isAuthenticated
     }
   ]
 
