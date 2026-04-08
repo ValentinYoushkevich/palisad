@@ -9,6 +9,7 @@ import * as subscriptionController from '@/controllers/subscription.controller.j
 import errorHandler from '@/middlewares/errorHandler.js';
 import { requireAuth } from '@/middlewares/requireAuth.js';
 import authRouter from '@/routes/auth.router.js';
+import dictionaryRouter from '@/routes/dictionary.router.js';
 import healthRouter from '@/routes/health.router.js';
 import locationRouter from '@/routes/location.router.js';
 import nurseryRouter from '@/routes/nursery.router.js';
@@ -33,6 +34,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/nurseries', nurseryRouter);
 app.use('/api/nurseries/:nurseryId/users', staffRouter);
 app.use('/api/nurseries/:nurseryId/locations', locationRouter);
+app.use('/api/nurseries/:nurseryId', dictionaryRouter);
 app.use('/api/subscriptions', subscriptionRouter);
 app.get('/api/plans', requireAuth, subscriptionController.getPlans);
 
