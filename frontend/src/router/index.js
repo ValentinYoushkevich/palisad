@@ -10,6 +10,8 @@ import { useAuthStore } from '@/stores/auth.store'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { createRouter, createWebHistory } from 'vue-router'
 
+const ROLE_OWNER = 'owner'
+
 const routes = [
   {
     path: '/plants',
@@ -72,7 +74,8 @@ const routes = [
     name: 'staff',
     component: StaffPage,
     meta: {
-      public: false
+      public: false,
+      roles: [ROLE_OWNER]
     }
   },
   {
@@ -89,16 +92,18 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const authStore = useAuthStore()
   const nurseryStore = useNurseryStore()
-  const isPublicRoute = Boolean(to.meta.public)
-  const isLoginRoute = to.path === '/login'
-  const isChangePasswordRoute = to.path === '/change-password'
-  const isNurseryCreateRoute = to.path === '/nursery/create'
+  const routeFlags = {
+    isPublicRoute: Boolean(to.meta.public),
+    isLoginRoute: to.path === '/login',
+    isChangePasswordRoute: to.path === '/change-password',
+    isNurseryCreateRoute: to.path === '/nursery/create'
+  }
 
   if (!authStore.isAuthenticated && !authStore.isAuthInitialized) {
     await authStore.initAuth()
   }
 
-  if (!isPublicRoute && !authStore.isAuthenticated) {
+  if (!routeFlags.isPublicRoute && !authStore.isAuthenticated) {
     return {
       path: '/login',
       query: {
@@ -108,21 +113,20 @@ router.beforeEach(async (to) => {
   }
 
   if (authStore.isAuthenticated) {
-    if (authStore.mustChangePassword && !isChangePasswordRoute) {
+    if (authStore.mustChangePassword && !routeFlags.isChangePasswordRoute) {
       return { path: '/change-password' }
     }
 
-    await nurseryStore.initNurseryContext()
-
-    if (!nurseryStore.nursery && !isNurseryCreateRoute) {
-      return { path: '/nursery/create' }
+    const protectedRedirect = await resolveProtectedRouteRedirect(routeFlags, nurseryStore)
+    if (protectedRedirect) {
+      return protectedRedirect
     }
 
-    if (nurseryStore.nursery && isNurseryCreateRoute) {
+    if (routeFlags.isLoginRoute) {
       return { path: '/plants' }
     }
 
-    if (isLoginRoute) {
+    if (!hasRoleAccess(to.meta.roles, authStore.role)) {
       return { path: '/plants' }
     }
   }
@@ -131,3 +135,25 @@ router.beforeEach(async (to) => {
 })
 
 export default router
+
+function hasRoleAccess(requiredRoles, userRole) {
+  if (!Array.isArray(requiredRoles) || requiredRoles.length === 0) {
+    return true
+  }
+
+  return requiredRoles.includes(userRole)
+}
+
+async function resolveProtectedRouteRedirect(routeFlags, nurseryStore) {
+  await nurseryStore.initNurseryContext()
+
+  if (!nurseryStore.nursery && !routeFlags.isNurseryCreateRoute) {
+    return { path: '/nursery/create' }
+  }
+
+  if (nurseryStore.nursery && routeFlags.isNurseryCreateRoute) {
+    return { path: '/plants' }
+  }
+
+  return null
+}

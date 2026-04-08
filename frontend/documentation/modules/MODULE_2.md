@@ -278,6 +278,17 @@ async function handleSubmit() {
 
 ---
 
+## Layout & Navigation Contract
+
+- Роли: `owner`, `agronomist`, `worker`, `observer`.
+- В `header` обязательно выводятся:
+  - название системы (слева);
+  - имя пользователя, его роль(и), кнопка `Выход` (справа).
+- В `sidebar` действует единое правило:
+  - `Общий доступ` — пункты, видимые как минимум одной не-owner роли;
+  - `Администрирование` — owner-only пункты.
+- Router guard должен проверять не только авторизацию, но и role-access для owner-only маршрутов (минимум `/staff`).
+
 ## Критерии приёмки
 
 | # | Проверка | Как проверить |
@@ -289,3 +300,4 @@ async function handleSubmit() {
 | 5 | Logout очищает стор и Dexie | Выйти → `user = null`, IndexedDB пустой |
 | 6 | Role getters корректны | `isOwner`, `canWrite` возвращают правильные значения |
 | 7 | Смена пароля сбрасывает `mustChangePassword` | После смены — доступна навигация |
+| 8 | Owner-only route недоступен не-owner | Войти как `worker` и открыть `/staff` → редирект на `/plants` |

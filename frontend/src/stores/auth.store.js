@@ -50,7 +50,22 @@ export const useAuthStore = defineStore('auth', {
     isObserver: (state) => state.user?.role === ROLE_OBSERVER,
     canWrite: (state) => [ROLE_OWNER, ROLE_AGRONOMIST, ROLE_WORKER].includes(state.user?.role),
     canManageStructure: (state) => [ROLE_OWNER, ROLE_AGRONOMIST].includes(state.user?.role),
-    canManageStaff: (state) => state.user?.role === ROLE_OWNER
+    canManageStaff: (state) => state.user?.role === ROLE_OWNER,
+    roleLabel: (state) => roleToLabel(state.user?.role),
+    roleLabels: (state) => {
+      if (!state.user?.role) {
+        return []
+      }
+
+      return [roleToLabel(state.user.role)]
+    },
+    userDisplayName: (state) => (
+      state.user?.name ||
+      state.user?.fullName ||
+      state.user?.full_name ||
+      state.user?.email ||
+      'Пользователь'
+    )
   },
   actions: {
     setUser(user) {
@@ -230,4 +245,15 @@ async function clearLocalDb() {
   ]
 
   await Promise.all(tables.map((tableName) => db.table(tableName).clear()))
+}
+
+function roleToLabel(role) {
+  const roleLabels = {
+    [ROLE_OWNER]: 'Owner',
+    [ROLE_AGRONOMIST]: 'Agronomist',
+    [ROLE_WORKER]: 'Worker',
+    [ROLE_OBSERVER]: 'Observer'
+  }
+
+  return roleLabels[role] || role || '—'
 }
