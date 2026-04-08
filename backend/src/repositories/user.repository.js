@@ -28,3 +28,47 @@ export function create(data) {
     .returning('*')
     .then((rows) => rows[0]);
 }
+
+export function findAllByNursery(nurseryId, filters = {}) {
+  const query = db('users').where({ nursery_id: nurseryId });
+
+  if (filters.role) {
+    query.where({ role: filters.role });
+  }
+  if (filters.isActive !== undefined) {
+    query.where({ is_active: filters.isActive });
+  }
+
+  return query.select(
+    'id',
+    'name',
+    'role',
+    'email',
+    'is_active',
+    'must_change_password',
+    'created_at'
+  );
+}
+
+export function findById(id) {
+  return db('users').where({ id }).first();
+}
+
+export function findByNurseryAndId(nurseryId, id) {
+  return db('users').where({ nursery_id: nurseryId, id }).first();
+}
+
+export function countActiveOwners(nurseryId) {
+  return db('users')
+    .where({ nursery_id: nurseryId, role: 'owner', is_active: true })
+    .count('id as count')
+    .then((rows) => Number(rows[0].count));
+}
+
+export function updateById(id, data) {
+  return db('users')
+    .where({ id })
+    .update({ ...data, updated_at: db.fn.now() })
+    .returning('*')
+    .then((rows) => rows[0]);
+}
