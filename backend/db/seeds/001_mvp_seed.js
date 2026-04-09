@@ -55,9 +55,9 @@ export async function seed(knex) {
 
     const [account] = await knex('accounts')
       .insert({
-        email: 'dev@palisad.local',
+        email: 'admin.owner@palisad.local',
         password_hash: passwordHash,
-        name: 'Dev Account',
+        name: 'Admin Owner Account',
       })
       .returning(['id']);
 
@@ -76,14 +76,43 @@ export async function seed(knex) {
       started_at: knex.fn.now(),
     });
 
-    await knex('users').insert({
-      nursery_id: nursery.id,
-      name: 'Owner',
-      role: 'owner',
-      password_hash: passwordHash,
-      email: 'owner@palisad.local',
-      is_active: true,
-      must_change_password: false,
-    });
+    await knex('users').insert([
+      {
+        nursery_id: nursery.id,
+        name: 'Admin User',
+        role: 'owner',
+        password_hash: passwordHash,
+        email: 'admin.owner@palisad.local',
+        is_active: true,
+        must_change_password: false,
+      },
+      {
+        nursery_id: nursery.id,
+        name: 'Agronomist User',
+        role: 'agronomist',
+        password_hash: passwordHash,
+        email: 'agronomist@palisad.local',
+        is_active: true,
+        must_change_password: false,
+      },
+      {
+        nursery_id: nursery.id,
+        name: 'Worker User',
+        role: 'worker',
+        password_hash: passwordHash,
+        email: 'worker@palisad.local',
+        is_active: true,
+        must_change_password: false,
+      },
+      {
+        nursery_id: nursery.id,
+        name: 'Observer User',
+        role: 'observer',
+        password_hash: passwordHash,
+        email: 'observer@palisad.local',
+        is_active: true,
+        must_change_password: false,
+      },
+    ]);
   }
 }

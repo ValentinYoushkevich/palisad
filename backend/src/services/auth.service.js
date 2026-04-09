@@ -80,7 +80,10 @@ export async function login(email, password, res) {
     });
   }
 
-  return { mustChangePassword: user?.must_change_password ?? false };
+  return {
+    mustChangePassword: user?.must_change_password ?? false,
+    user: mapAuthUser(user, account),
+  };
 }
 
 export function logout(res) {
@@ -111,6 +114,11 @@ export async function refresh(req, res) {
   const accessToken = signAccess(payload);
   const refreshToken = signRefresh({ accountId: account.id });
   setTokenCookies(res, accessToken, refreshToken);
+
+  return {
+    mustChangePassword: user?.must_change_password ?? false,
+    user: mapAuthUser(user, account),
+  };
 }
 
 export async function changePassword(accountId, currentPassword, newPassword) {
@@ -138,4 +146,15 @@ function setTokenCookies(res, accessToken, refreshToken) {
     ...COOKIE_OPTIONS,
     maxAge: REFRESH_TTL_MS,
   });
+}
+
+function mapAuthUser(user, account) {
+  return {
+    id: user?.id ?? null,
+    nursery_id: user?.nursery_id ?? null,
+    role: user?.role ?? '',
+    name: user?.name || account?.name || account?.email || 'Пользователь',
+    email: account?.email || user?.email || '',
+    must_change_password: Boolean(user?.must_change_password),
+  };
 }

@@ -15,7 +15,8 @@
       <Dropdown
         id="createLocationType"
         v-model="form.type"
-        :options="TYPE_OPTIONS"
+        :options="typeOptions"
+        :disabled="!typeOptions.length"
         class="w-full"
         optionLabel="label"
         optionValue="value"
@@ -40,7 +41,7 @@ import Dialog from 'primevue/dialog'
 import Dropdown from 'primevue/dropdown'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 defineOptions({ name: 'LocationCreateDialog' })
 
@@ -52,23 +53,66 @@ const props = defineProps({
   parentId: {
     type: String,
     default: null
+  },
+  parentType: {
+    type: String,
+    default: null
   }
 })
 
 const emit = defineEmits(['update:visible', 'created'])
 const locationsStore = useLocationsStore()
 
-const TYPE_OPTIONS = [
+const TYPE_LEVEL = {
+  area: 0,
+  section: 1,
+  row: 2,
+  place: 3
+}
+
+const ALL_TYPE_OPTIONS = [
   { label: 'Участок', value: 'area' },
   { label: 'Секция', value: 'section' },
   { label: 'Ряд', value: 'row' },
   { label: 'Место', value: 'place' }
 ]
 
+const typeOptions = computed(() => {
+  if (!props.parentType) {
+    return ALL_TYPE_OPTIONS
+  }
+  const parentLevel = TYPE_LEVEL[props.parentType]
+  if (parentLevel === undefined) {
+    return ALL_TYPE_OPTIONS
+  }
+  return ALL_TYPE_OPTIONS.filter((o) => TYPE_LEVEL[o.value] > parentLevel)
+})
+
 const form = ref({
   name: '',
-  type: 'section'
+  type: 'area'
 })
+
+watch(
+  () => [props.visible, props.parentType],
+  () => {
+    if (!props.visible) {
+      return
+    }
+    const opts = typeOptions.value
+    if (!opts.length) {
+      return
+    }
+    if (!props.parentType) {
+      form.value.type = 'area'
+      return
+    }
+    if (!opts.some((o) => o.value === form.value.type)) {
+      form.value.type = opts[0].value
+    }
+  },
+  { flush: 'post' }
+)
 
 function emitVisible(value) {
   emit('update:visible', value)
@@ -92,7 +136,7 @@ async function handleCreate() {
 
   form.value = {
     name: '',
-    type: 'section'
+    type: props.parentType ? (typeOptions.value[0]?.value ?? 'section') : 'area'
   }
 
   emit('created')

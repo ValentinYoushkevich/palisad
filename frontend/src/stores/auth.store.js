@@ -249,7 +249,7 @@ async function clearLocalDb() {
 
 function roleToLabel(role) {
   const roleLabels = {
-    [ROLE_OWNER]: 'Owner',
+    [ROLE_OWNER]: 'Owner (Админ)',
     [ROLE_AGRONOMIST]: 'Agronomist',
     [ROLE_WORKER]: 'Worker',
     [ROLE_OBSERVER]: 'Observer'

@@ -6,7 +6,7 @@
         <SyncStatusBadge />
         <div class="layout__identity">
           <p class="layout__username">{{ authStore.userDisplayName }}</p>
-          <p class="layout__roles">{{ authStore.roleLabels.join(', ') }}</p>
+          <p class="layout__roles">{{ roleText }}</p>
         </div>
         <button class="layout__logout" type="button" @click="handleLogout">Выход</button>
       </div>
@@ -62,13 +62,15 @@ const authStore = useAuthStore()
 const nurseryStore = useNurseryStore()
 const router = useRouter()
 const { processQueue } = useSyncManager()
+const roleText = computed(() => authStore.roleLabels.join(', ') || authStore.roleLabel || '—')
+const hasAdminAccess = computed(() => authStore.canManageStructure || authStore.canManageStaff || authStore.isOwner)
 
 const commonNavItems = computed(() => {
   const items = [
     {
       to: '/plants',
       label: 'Растения',
-      visible: authStore.isAuthenticated
+      visible: authStore.isAuthenticated && !hasAdminAccess.value
     },
     {
       to: '/nursery/create',
@@ -83,17 +85,17 @@ const commonNavItems = computed(() => {
     {
       to: '/locations',
       label: 'Локации',
-      visible: authStore.isAuthenticated
+      visible: false
     },
     {
       to: '/catalog',
       label: 'Справочники',
-      visible: authStore.isAuthenticated
+      visible: false
     },
     {
       to: '/scanner',
       label: 'Сканер',
-      visible: authStore.isAuthenticated
+      visible: authStore.canWrite
     },
     {
       to: '/activity',
@@ -103,7 +105,7 @@ const commonNavItems = computed(() => {
     {
       to: '/labels',
       label: 'Этикетки',
-      visible: authStore.isAuthenticated
+      visible: authStore.canWrite
     }
   ]
 
@@ -112,6 +114,26 @@ const commonNavItems = computed(() => {
 
 const adminNavItems = computed(() => {
   const items = [
+    {
+      to: '/plants',
+      label: 'Растения',
+      visible: authStore.canManageStructure
+    },
+    {
+      to: '/locations',
+      label: 'Создание участков и секций',
+      visible: authStore.canManageStructure
+    },
+    {
+      to: '/catalog',
+      label: 'Справочники и типы',
+      visible: authStore.canManageStructure
+    },
+    {
+      to: '/nursery/settings',
+      label: 'Подписка',
+      visible: authStore.isOwner && Boolean(nurseryStore.nursery)
+    },
     {
       to: '/staff',
       label: 'Сотрудники',

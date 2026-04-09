@@ -110,8 +110,15 @@ async function ensureParentValid(nurseryId, parentId, childType, selfId = null) 
     throw new AppError('Родительская локация не найдена в этом питомнике', 400);
   }
 
-  if (TYPE_LEVEL[parent.type] + 1 !== TYPE_LEVEL[childType]) {
-    throw new AppError('Нарушена иерархия локаций area -> section -> row -> place', 400);
+  if (parent.type === 'place') {
+    throw new AppError('Нельзя добавить дочернюю локацию внутри «места»', 400);
+  }
+
+  if (TYPE_LEVEL[childType] <= TYPE_LEVEL[parent.type]) {
+    throw new AppError(
+      'Нарушена иерархия локаций: участок → секция → ряд → место. Дочерний тип должен быть ниже по уровню, чем родительский.',
+      400
+    );
   }
 }
 

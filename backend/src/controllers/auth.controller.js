@@ -25,8 +25,8 @@ export function logout(_req, res) {
 
 export async function refresh(req, res, next) {
   try {
-    await authService.refresh(req, res);
-    return res.json({ message: 'Токен обновлён' });
+    const result = await authService.refresh(req, res);
+    return res.json(result);
   } catch (err) {
     return next(err);
   }
