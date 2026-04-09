@@ -6,7 +6,7 @@
     style="width: 520px"
     @update:visible="emitVisible"
   >
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="speciesSearch">Поиск по GBIF</label>
       <InputText
         id="speciesSearch"
@@ -18,24 +18,24 @@
       <small class="text-color-secondary">Минимум 2 символа</small>
     </div>
 
-    <div v-if="speciesStore.isSearching" class="speciesSearch__spinner">
+    <div v-if="speciesStore.isSearching" class="flex justify-center py-3">
       <ProgressSpinner style="width: 30px; height: 30px" />
     </div>
 
-    <div v-if="speciesStore.searchResults.length" class="speciesSearch__results">
+    <div v-if="speciesStore.searchResults.length" class="mb-3 flex max-h-56 flex-col gap-1.5 overflow-auto">
       <button
         v-for="result in speciesStore.searchResults"
         :key="result.gbifId"
-        class="speciesSearch__result"
+        class="cursor-pointer rounded-lg border border-gray-200 bg-white p-2 text-left"
         type="button"
         @click="selectedGbif = result"
       >
-        <div class="speciesSearch__resultTitle">{{ result.scientificName }}</div>
-        <div class="speciesSearch__resultMeta">{{ result.family }}</div>
+        <div class="font-semibold">{{ result.scientificName }}</div>
+        <div class="text-sm text-gray-500">{{ result.family }}</div>
       </button>
     </div>
 
-    <div v-if="selectedGbif" class="field">
+    <div v-if="selectedGbif" class="mb-3 flex flex-col gap-1.5">
       <label for="displayNameRu">Русское название *</label>
       <InputText
         id="displayNameRu"
@@ -133,45 +133,3 @@ function close() {
   emitVisible(false)
 }
 </script>
-
-<style lang="scss" scoped>
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.speciesSearch__spinner {
-  display: flex;
-  justify-content: center;
-  padding: 12px 0;
-}
-
-.speciesSearch__results {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-  max-height: 220px;
-  overflow: auto;
-}
-
-.speciesSearch__result {
-  text-align: left;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 8px;
-  background: #ffffff;
-  cursor: pointer;
-}
-
-.speciesSearch__resultTitle {
-  font-weight: 600;
-}
-
-.speciesSearch__resultMeta {
-  color: #6b7280;
-  font-size: 13px;
-}
-</style>

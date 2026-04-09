@@ -45,3 +45,17 @@
   justify-content: center;
   backdrop-filter: blur(2px);
 }
+.p-datatable .p-paginator-bottom {
+  border-bottom: none;
+}
+
+.catalog-dictionary-dialog :deep(.p-inputtext),
+.catalog-dictionary-dialog :deep(.p-inputnumber-input),
+.catalog-dictionary-dialog select {
+  min-height: 3rem;
+}
+
+.catalog-dictionary-dialog select {
+  padding-top: 0.625rem;
+  padding-bottom: 0.625rem;
+}

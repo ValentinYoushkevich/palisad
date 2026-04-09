@@ -6,7 +6,7 @@
     style="width: 460px"
     @update:visible="emitVisible"
   >
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="operationType">Тип операции *</label>
       <Dropdown
         id="operationType"
@@ -18,7 +18,7 @@
       />
     </div>
 
-    <div v-if="isTransplant" class="field">
+    <div v-if="isTransplant" class="mb-3 flex flex-col gap-1.5">
       <label for="newContainerId">Новый контейнер *</label>
       <Dropdown
         id="newContainerId"
@@ -30,7 +30,7 @@
       />
     </div>
 
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="operationNotes">Заметки</label>
       <Textarea id="operationNotes" v-model="form.notes" class="w-full" rows="3" />
     </div>
@@ -110,12 +110,3 @@ async function handleCreate() {
   emitVisible(false)
 }
 </script>
-
-<style lang="scss" scoped>
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-</style>

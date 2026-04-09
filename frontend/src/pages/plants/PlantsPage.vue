@@ -1,8 +1,8 @@
 <template>
-  <section class="plantsPage">
-    <div class="plantsPage__header">
+  <section class="flex flex-col gap-3">
+    <div class="flex items-center justify-between">
       <h2>Реестр растений</h2>
-      <div class="plantsPage__actions">
+      <div class="flex gap-2">
         <Button
           v-if="showCreateActions"
           icon="pi pi-plus"
@@ -34,13 +34,13 @@
     >
       <Column header="QR / Код">
         <template #body="{ data }">
-          <div class="plantsPage__mono">{{ data.numeric_code }}</div>
+          <div class="font-mono">{{ data.numeric_code }}</div>
         </template>
       </Column>
       <Column header="Вид / Сорт">
         <template #body="{ data }">
           <div>{{ data.display_name_ru }}</div>
-          <div v-if="data.variety" class="plantsPage__muted">{{ data.variety }}</div>
+          <div v-if="data.variety" class="text-sm text-gray-500">{{ data.variety }}</div>
         </template>
       </Column>
       <Column header="Контейнер">
@@ -155,31 +155,3 @@ function openPlant(id) {
   router.push(`/plants/${id}`)
 }
 </script>
-
-<style lang="scss" scoped>
-.plantsPage {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.plantsPage__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.plantsPage__actions {
-  display: flex;
-  gap: 8px;
-}
-
-.plantsPage__mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-}
-
-.plantsPage__muted {
-  color: #6b7280;
-  font-size: 13px;
-}
-</style>

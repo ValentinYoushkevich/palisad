@@ -6,7 +6,7 @@
     style="width: 520px"
     @update:visible="emitVisible"
   >
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="plantSpecies">Вид *</label>
       <Dropdown
         id="plantSpecies"
@@ -18,19 +18,19 @@
         filter
       />
     </div>
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="plantVariety">Сорт</label>
       <InputText id="plantVariety" v-model="form.variety" class="w-full" />
     </div>
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="plantDate">Дата посадки</label>
       <Calendar id="plantDate" v-model="form.plantedAt" class="w-full" dateFormat="yy-mm-dd" />
     </div>
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <span>Источник</span>
       <SelectButton v-model="form.source" :options="SOURCE_OPTIONS" optionLabel="label" optionValue="value" />
     </div>
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="plantContainer">Контейнер</label>
       <Dropdown
         id="plantContainer"
@@ -41,7 +41,7 @@
         class="w-full"
       />
     </div>
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="plantLocation">Местонахождение</label>
       <Dropdown
         id="plantLocation"
@@ -53,7 +53,7 @@
         filter
       />
     </div>
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="plantNotes">Заметки</label>
       <Textarea id="plantNotes" v-model="form.notes" class="w-full" rows="2" />
     </div>
@@ -158,12 +158,3 @@ function toIsoDate(value) {
   return date.toISOString().slice(0, 10)
 }
 </script>
-
-<style lang="scss" scoped>
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-</style>

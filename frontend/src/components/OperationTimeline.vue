@@ -1,38 +1,38 @@
 <template>
   <div class="operationTimeline">
-    <div v-if="isLoading" class="operationTimeline__loading">
+    <div v-if="isLoading" class="flex justify-center py-4">
       <ProgressSpinner style="width: 30px; height: 30px" />
     </div>
 
     <Timeline v-else :value="operations" class="w-full">
       <template #marker="{ item }">
-        <span class="operationTimeline__marker" :style="{ background: typeColor(item.type) }">
-          <i :class="typeIcon(item.type)" class="operationTimeline__markerIcon" />
+        <span class="inline-flex h-7 w-7 items-center justify-center rounded-full" :style="{ background: typeColor(item.type) }">
+          <i :class="typeIcon(item.type)" class="text-[13px] text-white" />
         </span>
       </template>
 
       <template #content="{ item }">
-        <div class="operationTimeline__card">
-          <div class="operationTimeline__cardHead">
+        <div class="rounded-[10px] bg-white p-3">
+          <div class="flex justify-between gap-3">
             <div>
-              <div class="operationTimeline__title">{{ typeLabel(item.type) }}</div>
-              <div v-if="item.notes" class="operationTimeline__notes">{{ item.notes }}</div>
-              <div v-if="item._pending" class="operationTimeline__pending">Ожидает синхронизации</div>
+              <div class="font-semibold">{{ typeLabel(item.type) }}</div>
+              <div v-if="item.notes" class="mt-1 text-sm text-gray-500">{{ item.notes }}</div>
+              <div v-if="item._pending" class="mt-1 text-sm text-amber-600">Ожидает синхронизации</div>
             </div>
-            <div class="operationTimeline__date">{{ formatDate(item.created_at) }}</div>
+            <div class="text-sm text-gray-500">{{ formatDate(item.created_at) }}</div>
           </div>
 
-          <div v-if="item.photos?.length" class="operationTimeline__photos">
+          <div v-if="item.photos?.length" class="mt-2 flex flex-wrap gap-2">
             <img
               v-for="photo in item.photos"
               :key="photo.id"
               :src="photo.url"
               alt="operation"
-              class="operationTimeline__photo"
+              class="h-[60px] w-20 rounded object-cover"
             >
           </div>
 
-          <div v-if="canEdit" class="operationTimeline__actions">
+          <div v-if="canEdit" class="mt-2 flex gap-1">
             <Button icon="pi pi-pencil" size="small" text @click="emit('edit', item)" />
             <Button icon="pi pi-trash" severity="danger" size="small" text @click="emit('delete', item)" />
           </div>
@@ -117,78 +117,3 @@ function formatDate(value) {
   })
 }
 </script>
-
-<style lang="scss" scoped>
-.operationTimeline__loading {
-  display: flex;
-  justify-content: center;
-  padding: 16px 0;
-}
-
-.operationTimeline__marker {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.operationTimeline__markerIcon {
-  color: #ffffff;
-  font-size: 13px;
-}
-
-.operationTimeline__card {
-  background: #ffffff;
-  border-radius: 10px;
-  padding: 12px;
-}
-
-.operationTimeline__cardHead {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.operationTimeline__title {
-  font-weight: 600;
-}
-
-.operationTimeline__notes {
-  color: #6b7280;
-  font-size: 13px;
-  margin-top: 4px;
-}
-
-.operationTimeline__pending {
-  color: #d97706;
-  font-size: 13px;
-  margin-top: 4px;
-}
-
-.operationTimeline__date {
-  color: #6b7280;
-  font-size: 13px;
-}
-
-.operationTimeline__photos {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-
-.operationTimeline__photo {
-  width: 80px;
-  height: 60px;
-  object-fit: cover;
-  border-radius: 4px;
-}
-
-.operationTimeline__actions {
-  display: flex;
-  gap: 4px;
-  margin-top: 8px;
-}
-</style>

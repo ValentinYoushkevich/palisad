@@ -1,14 +1,14 @@
 <template>
-  <div class="nurserySettings">
+  <div class="flex flex-col gap-4 p-4">
     <h2>Настройки питомника</h2>
 
-    <div v-if="nurseryStore.nursery" class="nurserySettings__card">
+    <div v-if="nurseryStore.nursery" class="rounded-xl bg-white p-4">
       <p><strong>Название:</strong> {{ nurseryStore.nursery.name }}</p>
       <p><strong>Адрес:</strong> {{ nurseryStore.nursery.address || '—' }}</p>
       <Button class="mt-2" label="Редактировать" outlined @click="editVisible = true" />
     </div>
 
-    <div class="nurserySettings__card">
+    <div class="rounded-xl bg-white p-4">
       <h3>Тариф</h3>
       <p>
         Текущий план:
@@ -25,7 +25,7 @@
         @click="planVisible = !planVisible"
       />
 
-      <div v-if="planVisible" class="nurserySettings__plans">
+      <div v-if="planVisible" class="mt-3 flex flex-col items-start">
         <Button
           v-for="plan in nurseryStore.plans"
           :key="plan.id"
@@ -77,25 +77,3 @@ async function handleChangePlan(planId) {
   planVisible.value = false
 }
 </script>
-
-<style lang="scss" scoped>
-.nurserySettings {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.nurserySettings__card {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.nurserySettings__plans {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-</style>

@@ -1,23 +1,22 @@
 <template>
   <section class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h2>Справочники</h2>
+    <div class="flex items-center justify-start">
       <Button
         v-if="activeSection"
-        label="Назад к разделам"
         icon="pi pi-arrow-left"
-        text
+        severity="primary"
+        outlined
+        size="small"
+        aria-label="Назад"
         @click="activeSection = null"
       />
+      <h2 v-else>Справочники</h2>
     </div>
-
-    <Message v-if="errorText" severity="error">{{ errorText }}</Message>
-
     <div v-if="!activeSection" class="grid grid-cols-1 gap-5 sm:grid-cols-2">
       <Card
         v-for="section in sectionCards"
         :key="section.key"
-        class="catalog-card cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-xl"
+        class="catalog-card cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm hover:shadow-xl"
         @click="activeSection = section.key"
       >
         <template #header>
@@ -42,45 +41,38 @@
             {{ section.description }}
           </p>
         </template>
-        <template #footer>
-          <div class="flex items-center justify-between border-t border-slate-100 pt-2 text-sm">
-            <span class="text-slate-500">Добавлено</span>
-            <span class="font-semibold text-slate-800">{{ section.countLabel }}</span>
-          </div>
-        </template>
       </Card>
     </div>
 
     <div v-else class="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h3 class="text-lg font-semibold">{{ sectionTitle }}</h3>
-        <div class="text-sm text-slate-500">
-          Всего записей: <span class="font-semibold text-slate-800">{{ sectionCount }}</span>
-        </div>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
         <Button
           v-if="authStore.canManageStructure && activeSection === 'species'"
           icon="pi pi-plus"
           label="Добавить вид"
+          size="small"
           @click="speciesDialogVisible = true"
         />
         <Button
           v-if="authStore.canManageStructure && activeSection === 'tags'"
           icon="pi pi-plus"
           label="Добавить тег"
+          size="small"
           @click="openCreateTag"
         />
         <Button
           v-if="authStore.canManageStructure && activeSection === 'movementTypes'"
           icon="pi pi-plus"
           label="Добавить тип движения"
+          size="small"
           @click="openCreateMovementType"
         />
         <Button
           v-if="authStore.canManageStructure && activeSection === 'containerTypes'"
           icon="pi pi-plus"
           label="Добавить тип контейнера"
+          size="small"
           @click="openCreateContainerType"
         />
       </div>
@@ -88,9 +80,18 @@
       <DataTable
         :value="sectionRows"
         :loading="isSectionLoading"
+        :rows="20"
+        :rowsPerPageOptions="[20, 50, 100]"
+        paginator
         stripedRows
         size="small"
       >
+        <template #empty>
+          <div class="py-6 text-center text-sm text-slate-500">
+            {{ emptyStateText }}
+          </div>
+        </template>
+
         <template v-if="activeSection === 'species'">
           <Column field="display_name_ru" header="Название">
             <template #body="{ data }">
@@ -134,6 +135,11 @@
           <Column field="sets_status" header="Меняет статус">
             <template #body="{ data }">{{ statusLabelByValue(data.sets_status) }}</template>
           </Column>
+          <Column header="Статус">
+            <template #body="{ data }">
+              <Tag :value="activeLabel(data.is_active)" :severity="activeSeverity(data.is_active)" />
+            </template>
+          </Column>
           <Column header="Служебный">
             <template #body="{ data }">
               <Tag :value="systemLabel(data.is_system)" :severity="systemSeverity(data.is_system)" />
@@ -166,32 +172,36 @@
         </template>
       </DataTable>
     </div>
-
     <SpeciesSearchDialog v-model:visible="speciesDialogVisible" @created="handleSpeciesCreated" />
 
-    <Dialog v-model:visible="tagDialogVisible" :header="tagDialogTitle" modal style="width: 460px">
+    <Dialog v-model:visible="tagDialogVisible" :header="tagDialogTitle" class="catalog-dictionary-dialog" modal style="width: 460px">
       <div class="space-y-3">
+        <Message v-if="tagsStore.tagsError" severity="error">{{ tagsStore.tagsError }}</Message>
         <div class="space-y-1">
           <label for="tagName">Название</label>
           <InputText id="tagName" v-model="tagForm.name" class="w-full" />
         </div>
         <div class="space-y-1">
           <label for="tagColor">Цвет (HEX)</label>
-          <InputText id="tagColor" v-model="tagForm.color" class="w-full" placeholder="#3B82F6" />
+          <div class="flex items-center gap-3">
+            <ColorPicker id="tagColor" v-model="tagColorValue" format="hex" />
+            <InputText :modelValue="normalizeHexColor(tagForm.color)" class="w-full" readonly />
+          </div>
         </div>
-        <label class="flex items-center gap-2 text-sm text-slate-700">
-          <input v-model="tagForm.is_active" type="checkbox">
-          <span>Активен</span>
-        </label>
+        <div class="flex items-center gap-2 text-sm text-slate-700">
+          <Checkbox v-model="tagForm.is_active" inputId="tagActive" binary />
+          <label for="tagActive">Активен</label>
+        </div>
       </div>
       <template #footer>
-        <Button label="Отмена" text @click="tagDialogVisible = false" />
+        <Button label="Отмена" text @click="closeTagDialog" />
         <Button :label="tagSaveLabel" :loading="tagsStore.isLoading" @click="handleSaveTag" />
       </template>
     </Dialog>
 
-    <Dialog v-model:visible="movementDialogVisible" :header="movementDialogTitle" modal style="width: 520px">
+    <Dialog v-model:visible="movementDialogVisible" :header="movementDialogTitle" class="catalog-dictionary-dialog" modal style="width: 520px">
       <div class="space-y-3">
+        <Message v-if="movementDialogError" severity="error">{{ movementDialogError }}</Message>
         <div class="space-y-1">
           <label for="movementName">Название</label>
           <InputText id="movementName" v-model="movementForm.name" class="w-full" />
@@ -202,24 +212,22 @@
         </div>
         <div class="space-y-1">
           <label for="movementStatus">Меняет статус</label>
-          <select id="movementStatus" v-model="movementForm.sets_status" class="w-full rounded-md border border-slate-300 px-3 py-2">
-            <option :value="null">Не меняет</option>
-            <option v-for="status in STATUS_OPTIONS" :key="status.value" :value="status.value">{{ status.label }}</option>
-          </select>
+          <Dropdown id="movementStatus" v-model="movementStatusValue" :options="movementStatusOptions" optionLabel="label" optionValue="value" class="w-full" />
         </div>
-        <label class="flex items-center gap-2 text-sm text-slate-700">
-          <input v-model="movementForm.is_active" type="checkbox">
-          <span>Активен</span>
-        </label>
+        <div class="flex items-center gap-2 text-sm text-slate-700">
+          <Checkbox v-model="movementForm.is_active" inputId="movementActive" binary />
+          <label for="movementActive">Активен</label>
+        </div>
       </div>
       <template #footer>
-        <Button label="Отмена" text @click="movementDialogVisible = false" />
+        <Button label="Отмена" text @click="closeMovementDialog" />
         <Button :label="movementSaveLabel" :loading="movementTypesStore.isLoading" @click="handleSaveMovementType" />
       </template>
     </Dialog>
 
-    <Dialog v-model:visible="containerDialogVisible" :header="containerDialogTitle" modal style="width: 560px">
+    <Dialog v-model:visible="containerDialogVisible" :header="containerDialogTitle" class="catalog-dictionary-dialog" modal style="width: 560px">
       <div class="grid gap-3 md:grid-cols-2">
+        <div class="md:col-span-2"><Message v-if="containerTypesStore.containerTypesError" severity="error">{{ containerTypesStore.containerTypesError }}</Message></div>
         <div class="space-y-1">
           <label for="containerName">Название</label>
           <InputText id="containerName" v-model="containerForm.name" class="w-full" />
@@ -230,9 +238,7 @@
         </div>
         <div class="space-y-1">
           <label for="containerKind">Вид контейнера</label>
-          <select id="containerKind" v-model="containerForm.container_kind" class="w-full rounded-md border border-slate-300 px-3 py-2">
-            <option v-for="kind in CONTAINER_KIND_OPTIONS" :key="kind.value" :value="kind.value">{{ kind.label }}</option>
-          </select>
+          <Dropdown id="containerKind" v-model="containerForm.container_kind" :options="CONTAINER_KIND_OPTIONS" optionLabel="label" optionValue="value" class="w-full" />
         </div>
         <div class="space-y-1">
           <label for="containerVolume">Объём (л)</label>
@@ -242,13 +248,13 @@
           <label for="containerSide">Сторона (см)</label>
           <InputNumber id="containerSide" v-model="containerForm.side_cm" class="w-full" :min="0" :useGrouping="false" />
         </div>
-        <label class="mt-7 flex items-center gap-2 text-sm text-slate-700">
-          <input v-model="containerForm.is_active" type="checkbox">
-          <span>Активен</span>
-        </label>
+        <div class="mt-7 flex items-center gap-2 text-sm text-slate-700">
+          <Checkbox v-model="containerForm.is_active" inputId="containerActive" binary />
+          <label for="containerActive">Активен</label>
+        </div>
       </div>
       <template #footer>
-        <Button label="Отмена" text @click="containerDialogVisible = false" />
+        <Button label="Отмена" text @click="closeContainerDialog" />
         <Button :label="containerSaveLabel" :loading="containerTypesStore.isLoading" @click="handleSaveContainerType" />
       </template>
     </Dialog>
@@ -259,6 +265,7 @@
 import '@/pages/catalog/catalog-cards.scss'
 import {
   CONTAINER_KIND_OPTIONS,
+  SECTION_CARD_META,
   SECTION_TITLES,
   STATUS_OPTIONS,
   activeLabel,
@@ -266,7 +273,9 @@ import {
   defaultContainerForm,
   defaultMovementForm,
   defaultTagForm,
+  emptyTextBySection,
   kindLabelByValue,
+  normalizeHexColor,
   statusLabelByValue,
   systemLabel,
   systemSeverity
@@ -279,9 +288,12 @@ import { useSpeciesStore } from '@/stores/species.store'
 import { useTagsStore } from '@/stores/tags.store'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
+import Checkbox from 'primevue/checkbox'
+import ColorPicker from 'primevue/colorpicker'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
+import Dropdown from 'primevue/dropdown'
 import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
@@ -306,59 +318,21 @@ const tagForm = ref(defaultTagForm())
 const movementDialogVisible = ref(false)
 const movementEditingId = ref(null)
 const movementForm = ref(defaultMovementForm())
+const movementDialogError = ref('')
 
 const containerDialogVisible = ref(false)
 const containerEditingId = ref(null)
 const containerForm = ref(defaultContainerForm())
 
-const errorText = computed(() => (
-  speciesStore.speciesError ||
-  tagsStore.tagsError ||
-  movementTypesStore.movementTypesError ||
-  containerTypesStore.containerTypesError
-))
-
 const sectionTitle = computed(() => SECTION_TITLES[activeSection.value] || 'Справочник')
-const sectionCount = computed(() => sectionRows.value.length)
-
-const sectionCards = computed(() => [
-  {
-    key: 'species',
-    title: 'Виды',
-    subtitle: 'Каталог растений',
-    description: 'Виды и наименования, с которыми работает питомник.',
-    countLabel: String(speciesStore.species.length),
-    iconClass: 'pi pi-sparkles text-2xl text-white',
-    headerGradient: 'linear-gradient(120deg, #059669 0%, #0d9488 52%, #0284c7 100%)'
-  },
-  {
-    key: 'tags',
-    title: 'Теги',
-    subtitle: 'Маркировка',
-    description: 'Теги для группировки, поиска и фильтрации растений.',
-    countLabel: String(tagsStore.tags.length),
-    iconClass: 'pi pi-tag text-2xl text-white',
-    headerGradient: 'linear-gradient(120deg, #2563eb 0%, #4f46e5 52%, #7c3aed 100%)'
-  },
-  {
-    key: 'movementTypes',
-    title: 'Типы движений',
-    subtitle: 'Операции',
-    description: 'Типы операций перемещения и изменения статусов.',
-    countLabel: String(movementTypesStore.movementTypes.length),
-    iconClass: 'pi pi-arrow-right-arrow-left text-2xl text-white',
-    headerGradient: 'linear-gradient(120deg, #f59e0b 0%, #f97316 52%, #ef4444 100%)'
-  },
-  {
-    key: 'containerTypes',
-    title: 'Типы контейнеров',
-    subtitle: 'Тара и ёмкости',
-    description: 'Шаблоны контейнеров и параметры тары для учета.',
-    countLabel: String(containerTypesStore.containerTypes.length),
-    iconClass: 'pi pi-box text-2xl text-white',
-    headerGradient: 'linear-gradient(120deg, #64748b 0%, #334155 52%, #0f172a 100%)'
-  }
-])
+const emptyStateText = computed(() => emptyTextBySection(activeSection.value))
+const sectionCountMap = computed(() => ({
+  species: speciesStore.species.length,
+  tags: tagsStore.tags.length,
+  movementTypes: movementTypesStore.movementTypes.length,
+  containerTypes: containerTypesStore.containerTypes.length
+}))
+const sectionCards = computed(() => SECTION_CARD_META.map((item) => ({ ...item, countLabel: String(sectionCountMap.value[item.key] ?? 0) })))
 
 const sectionRows = computed(() => {
   if (activeSection.value === 'species') {
@@ -400,7 +374,19 @@ const containerDialogTitle = computed(() => (containerEditingId.value ? 'Ред�
 const tagSaveLabel = computed(() => (tagEditingId.value ? 'Сохранить' : 'Добавить'))
 const movementSaveLabel = computed(() => (movementEditingId.value ? 'Сохранить' : 'Добавить'))
 const containerSaveLabel = computed(() => (containerEditingId.value ? 'Сохранить' : 'Добавить'))
-
+const movementStatusValue = computed({
+  get: () => movementForm.value.sets_status ?? '__none__',
+  set: (value) => {
+    movementForm.value.sets_status = value === '__none__' ? null : value
+  }
+})
+const movementStatusOptions = [{ label: 'Не меняет', value: '__none__' }, ...STATUS_OPTIONS]
+const tagColorValue = computed({
+  get: () => normalizeHexColor(tagForm.value.color).replace('#', ''),
+  set: (value) => {
+    tagForm.value.color = normalizeHexColor(`#${String(value || '').replace('#', '')}`)
+  }
+})
 onMounted(async () => {
   await Promise.all([
     speciesStore.fetchSpecies(),
@@ -413,9 +399,9 @@ onMounted(async () => {
 function openCreateTag() {
   tagEditingId.value = null
   tagForm.value = defaultTagForm()
+  tagsStore.tagsError = ''
   tagDialogVisible.value = true
 }
-
 function openEditTag(item) {
   tagEditingId.value = item.id
   tagForm.value = {
@@ -423,6 +409,7 @@ function openEditTag(item) {
     color: item.color || '#3B82F6',
     is_active: Boolean(item.is_active)
   }
+  tagsStore.tagsError = ''
   tagDialogVisible.value = true
 }
 
@@ -432,7 +419,7 @@ async function handleSaveTag() {
   }
   const payload = {
     name: tagForm.value.name.trim(),
-    color: normalizeHex(tagForm.value.color),
+    color: normalizeHexColor(tagForm.value.color),
     is_active: Boolean(tagForm.value.is_active)
   }
   const result = tagEditingId.value
@@ -447,9 +434,10 @@ async function handleSaveTag() {
 function openCreateMovementType() {
   movementEditingId.value = null
   movementForm.value = defaultMovementForm()
+  movementDialogError.value = ''
+  movementTypesStore.movementTypesError = ''
   movementDialogVisible.value = true
 }
-
 function openEditMovementType(item) {
   movementEditingId.value = item.id
   movementForm.value = {
@@ -458,10 +446,13 @@ function openEditMovementType(item) {
     sets_status: item.sets_status ?? null,
     is_active: Boolean(item.is_active)
   }
+  movementDialogError.value = ''
+  movementTypesStore.movementTypesError = ''
   movementDialogVisible.value = true
 }
 
 async function handleSaveMovementType() {
+  movementDialogError.value = ''
   if (!movementForm.value.name?.trim() || !movementForm.value.slug?.trim()) {
     return
   }
@@ -475,17 +466,28 @@ async function handleSaveMovementType() {
     ? await movementTypesStore.updateMovementType(movementEditingId.value, payload)
     : await movementTypesStore.createMovementType(payload)
   if (!result?.ok) {
+    movementDialogError.value = result?.error || movementTypesStore.movementTypesError || 'Не удалось сохранить тип движения.'
     return
   }
+  movementTypesStore.movementTypesError = ''
   movementDialogVisible.value = false
+  await movementTypesStore.fetchMovementTypes()
 }
+
+function closeMovementDialog() {
+  movementDialogVisible.value = false
+  movementDialogError.value = ''
+  movementTypesStore.movementTypesError = ''
+}
+function closeTagDialog() { tagDialogVisible.value = false; tagsStore.tagsError = '' }
+function closeContainerDialog() { containerDialogVisible.value = false; containerTypesStore.containerTypesError = '' }
 
 function openCreateContainerType() {
   containerEditingId.value = null
   containerForm.value = defaultContainerForm()
+  containerTypesStore.containerTypesError = ''
   containerDialogVisible.value = true
 }
-
 function openEditContainerType(item) {
   containerEditingId.value = item.id
   containerForm.value = {
@@ -496,6 +498,7 @@ function openEditContainerType(item) {
     side_cm: item.side_cm ?? null,
     is_active: Boolean(item.is_active)
   }
+  containerTypesStore.containerTypesError = ''
   containerDialogVisible.value = true
 }
 
@@ -518,21 +521,6 @@ async function handleSaveContainerType() {
     return
   }
   containerDialogVisible.value = false
-}
-
-function normalizeHex(value) {
-  if (!value) {
-    return '#3B82F6'
-  }
-
-  const raw = value.trim().replace('#', '')
-  const candidate = `#${raw}`
-
-  if (!/^#[0-9A-Fa-f]{6}$/.test(candidate)) {
-    return '#3B82F6'
-  }
-
-  return candidate.toUpperCase()
 }
 
 async function handleSpeciesCreated() {

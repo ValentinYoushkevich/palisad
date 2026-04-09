@@ -1,5 +1,5 @@
 <template>
-  <section class="labelsPage">
+  <section class="flex flex-col gap-3">
     <h2>Печать этикеток</h2>
 
     <Message v-if="!nurseryStore.hasFeature('feature_qr')" severity="warn">
@@ -7,7 +7,7 @@
     </Message>
 
     <template v-else>
-      <div class="labelsPage__card">
+      <div class="rounded-[10px] bg-white p-3">
         <h3>Выберите растения</h3>
         <DataTable
           v-model:selection="selectedPlants"
@@ -22,7 +22,7 @@
           <Column header="Вид / Сорт">
             <template #body="{ data }">
               <div>{{ data.display_name_ru }}</div>
-              <div v-if="data.variety" class="labelsPage__muted">{{ data.variety }}</div>
+              <div v-if="data.variety" class="text-sm text-gray-500">{{ data.variety }}</div>
             </template>
           </Column>
           <Column header="Контейнер">
@@ -31,9 +31,9 @@
         </DataTable>
       </div>
 
-      <div class="labelsPage__controls">
+      <div class="flex items-center gap-6">
         <div>
-          <span class="labelsPage__controlLabel">Формат:</span>
+          <span class="mr-2">Формат:</span>
           <SelectButton
             v-model="layout"
             :options="LAYOUT_OPTIONS"
@@ -41,7 +41,7 @@
             optionValue="value"
           />
         </div>
-        <div class="labelsPage__muted">
+        <div class="text-sm text-gray-500">
           Выбрано: {{ selectedPlants.length }} растений
         </div>
       </div>
@@ -101,32 +101,3 @@ async function handleGenerate() {
   isGenerating.value = false
 }
 </script>
-
-<style lang="scss" scoped>
-.labelsPage {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.labelsPage__card {
-  background: #ffffff;
-  border-radius: 10px;
-  padding: 12px;
-}
-
-.labelsPage__controls {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.labelsPage__controlLabel {
-  margin-right: 8px;
-}
-
-.labelsPage__muted {
-  color: #6b7280;
-  font-size: 13px;
-}
-</style>

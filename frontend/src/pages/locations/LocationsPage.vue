@@ -1,6 +1,6 @@
 <template>
-  <section class="locationsPage">
-    <div class="locationsPage__header">
+  <section class="flex flex-col gap-3">
+    <div class="flex items-center justify-between">
       <h2>Структура питомника</h2>
       <Button
         v-if="authStore.canManageStructure"
@@ -14,12 +14,12 @@
       {{ locationsStore.locationsError }}
     </Message>
 
-    <Tree :value="locationsStore.tree" :loading="locationsStore.isLoading" class="locationsPage__tree">
+    <Tree :value="locationsStore.tree" :loading="locationsStore.isLoading" class="rounded-lg bg-white p-2 locationsPage__tree">
       <template #default="{ node }">
-        <div class="locationsPage__node">
-          <div class="locationsPage__nodeMain">
+        <div class="box-border flex w-full min-w-0 max-w-full items-center justify-between gap-3">
+          <div class="flex min-w-0 flex-1 items-center gap-2">
             <Tag :value="typeLabel(node.type)" severity="secondary" />
-            <span class="locationsPage__nodeName">{{ node.name }}</span>
+            <span class="truncate">{{ node.name }}</span>
             <Button
               v-if="authStore.canManageStructure && node.type !== 'place'"
               icon="pi pi-plus"
@@ -28,7 +28,7 @@
               @click.stop="openCreateChild(node)"
             />
           </div>
-          <div v-if="authStore.canManageStructure" class="locationsPage__nodeTrailing">
+          <div v-if="authStore.canManageStructure" class="flex shrink-0 items-center gap-1">
             <Button icon="pi pi-pencil" size="small" text @click.stop="openEdit(node)" />
             <Button icon="pi pi-trash" severity="danger" size="small" text @click.stop="handleDelete(node, $event)" />
           </div>
@@ -140,23 +140,7 @@ async function handleReload() {
 </script>
 
 <style lang="scss" scoped>
-.locationsPage {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.locationsPage__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .locationsPage__tree {
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 8px;
-
   /* Строка дерева на всю ширину: toggler слева, подпись растягивается */
   :deep(.p-treenode-content) {
     display: flex;
@@ -177,37 +161,5 @@ async function handleReload() {
     padding-bottom: 10px;
     margin-bottom: 10px;
   }
-}
-
-.locationsPage__node {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.locationsPage__nodeMain {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex: 1;
-}
-
-.locationsPage__nodeName {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.locationsPage__nodeTrailing {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
 }
 </style>

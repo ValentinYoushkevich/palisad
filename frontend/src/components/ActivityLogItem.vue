@@ -1,33 +1,36 @@
 <template>
-  <div class="activityLogItem">
-    <div class="activityLogItem__marker" :style="{ background: eventColor(log.event_type) }">
-      <i :class="eventIcon(log.event_type)" class="activityLogItem__icon" />
+  <div class="flex gap-3 rounded-[10px] bg-white p-3">
+    <div
+      class="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full"
+      :style="{ background: eventColor(log.event_type) }"
+    >
+      <i :class="eventIcon(log.event_type)" class="text-[13px] text-white" />
     </div>
 
-    <div class="activityLogItem__content">
-      <div class="activityLogItem__head">
+    <div class="min-w-0 flex-1">
+      <div class="flex justify-between gap-2">
         <div>
-          <span class="activityLogItem__title">{{ eventLabel(log.event_type) }}</span>
-          <span v-if="log.user_name" class="activityLogItem__user">· {{ log.user_name }}</span>
+          <span class="font-semibold">{{ eventLabel(log.event_type) }}</span>
+          <span v-if="log.user_name" class="ml-1.5 text-sm text-gray-500">· {{ log.user_name }}</span>
         </div>
-        <span class="activityLogItem__date">{{ formatDate(log.created_at) }}</span>
+        <span class="text-xs text-gray-500">{{ formatDate(log.created_at) }}</span>
       </div>
 
-      <div v-if="log.event_type === 'movement.created' && log.details" class="activityLogItem__details">
+      <div v-if="log.event_type === 'movement.created' && log.details" class="mt-1 text-sm text-gray-500">
         {{ log.details.type_name }}<span v-if="log.details.plant_qr"> · {{ log.details.plant_qr }}</span>
       </div>
 
-      <div v-if="log.event_type === 'operation.created' && log.details?.type === 'transplant'" class="activityLogItem__details">
+      <div v-if="log.event_type === 'operation.created' && log.details?.type === 'transplant'" class="mt-1 text-sm text-gray-500">
         Пересадка: {{ log.details.from_container || '—' }} → {{ log.details.to_container || '—' }}
       </div>
 
-      <div v-if="log.event_type === 'plant.status_changed' && log.details" class="activityLogItem__details">
+      <div v-if="log.event_type === 'plant.status_changed' && log.details" class="mt-1 text-sm text-gray-500">
         {{ statusLabel(log.details.from) }} → {{ statusLabel(log.details.to) }}
       </div>
 
       <div v-if="log.entity_type === 'plant' && log.entity_id">
         <Button
-          class="activityLogItem__linkButton"
+          class="mt-1 p-0"
           label="Открыть растение"
           size="small"
           text
@@ -125,65 +128,3 @@ function formatDate(value) {
   })
 }
 </script>
-
-<style lang="scss" scoped>
-.activityLogItem {
-  display: flex;
-  gap: 12px;
-  background: #ffffff;
-  border-radius: 10px;
-  padding: 12px;
-}
-
-.activityLogItem__marker {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.activityLogItem__icon {
-  color: #ffffff;
-  font-size: 13px;
-}
-
-.activityLogItem__content {
-  flex: 1;
-  min-width: 0;
-}
-
-.activityLogItem__head {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.activityLogItem__title {
-  font-weight: 600;
-}
-
-.activityLogItem__user {
-  color: #6b7280;
-  font-size: 13px;
-  margin-left: 6px;
-}
-
-.activityLogItem__date {
-  color: #6b7280;
-  font-size: 12px;
-}
-
-.activityLogItem__details {
-  color: #6b7280;
-  font-size: 13px;
-  margin-top: 4px;
-}
-
-.activityLogItem__linkButton {
-  padding: 0;
-  margin-top: 4px;
-}
-</style>

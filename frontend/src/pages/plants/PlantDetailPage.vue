@@ -1,11 +1,11 @@
 <template>
-  <section class="plantDetail">
-    <div class="plantDetail__head">
+  <section class="flex flex-col gap-2.5">
+    <div class="flex items-start justify-between gap-3">
       <div>
         <h2>Карточка растения</h2>
-        <p class="plantDetail__meta">ID: {{ route.params.id }}</p>
+        <p class="text-sm text-gray-500">ID: {{ route.params.id }}</p>
       </div>
-      <div class="plantDetail__actions">
+      <div class="flex gap-2">
         <Button label="Назад к реестру" text @click="router.push('/plants')" />
         <Button v-if="authStore.canWrite" icon="pi pi-plus" label="Добавить операцию" @click="createOperationVisible = true" />
         <Button
@@ -130,27 +130,3 @@ async function handleDeleteMovement(movement) {
   await movementsStore.deleteMovement(movement.id, plantId.value)
 }
 </script>
-
-<style lang="scss" scoped>
-.plantDetail {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.plantDetail__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.plantDetail__actions {
-  display: flex;
-  gap: 8px;
-}
-
-.plantDetail__meta {
-  color: #6b7280;
-}
-</style>

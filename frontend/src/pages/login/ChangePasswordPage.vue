@@ -1,9 +1,9 @@
 <template>
-  <section class="changePassword">
+  <section class="flex max-w-[360px] flex-col gap-3">
     <h2>Change password</h2>
     <p>Для продолжения необходимо обновить пароль.</p>
 
-    <div class="changePassword__field">
+    <div class="flex flex-col gap-1.5">
       <label for="currentPassword">Current password</label>
       <Password
         id="currentPassword"
@@ -13,12 +13,12 @@
       />
     </div>
 
-    <div class="changePassword__field">
+    <div class="flex flex-col gap-1.5">
       <label for="newPassword">New password</label>
       <Password id="newPassword" v-model="newPassword" toggleMask />
     </div>
 
-    <div class="changePassword__field">
+    <div class="flex flex-col gap-1.5">
       <label for="confirmPassword">Confirm password</label>
       <Password id="confirmPassword" v-model="confirmPassword" :feedback="false" toggleMask />
     </div>
@@ -26,7 +26,7 @@
     <Message v-if="errorText" severity="error">{{ errorText }}</Message>
     <Message v-if="successText" severity="success">{{ successText }}</Message>
 
-    <div class="changePassword__actions">
+    <div class="flex gap-2">
       <Button :loading="authStore.isLoading" label="Save new password" @click="submitChangePassword" />
       <Button
         :disabled="authStore.isLoading"
@@ -87,23 +87,3 @@ async function submitChangePassword() {
   await router.push('/plants')
 }
 </script>
-
-<style lang="scss" scoped>
-.changePassword {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 360px;
-}
-
-.changePassword__field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.changePassword__actions {
-  display: flex;
-  gap: 8px;
-}
-</style>

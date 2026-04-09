@@ -6,7 +6,7 @@
     style="width: 460px"
     @update:visible="emitVisible"
   >
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="movementType">Тип движения *</label>
       <Dropdown
         id="movementType"
@@ -17,7 +17,7 @@
         class="w-full"
       >
         <template #option="{ option }">
-          <div class="movementCreate__option">
+          <div class="flex items-center gap-1.5">
             <Tag v-if="option.is_system" value="Системный" severity="secondary" />
             <span>{{ option.name }}</span>
             <Tag
@@ -30,7 +30,7 @@
       </Dropdown>
     </div>
 
-    <div v-if="isTransfer" class="field">
+    <div v-if="isTransfer" class="mb-3 flex flex-col gap-1.5">
       <label for="fromLocation">Откуда</label>
       <Dropdown
         id="fromLocation"
@@ -43,7 +43,7 @@
       />
     </div>
 
-    <div v-if="isTransfer" class="field">
+    <div v-if="isTransfer" class="mb-3 flex flex-col gap-1.5">
       <label for="toLocation">Куда *</label>
       <Dropdown
         id="toLocation"
@@ -55,12 +55,12 @@
       />
     </div>
 
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="movementQuantity">Количество</label>
       <InputNumber id="movementQuantity" v-model="form.quantity" :min="1" class="w-full" />
     </div>
 
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="movementNotes">Заметки</label>
       <Textarea id="movementNotes" v-model="form.notes" class="w-full" rows="2" />
     </div>
@@ -170,18 +170,3 @@ async function handleCreate() {
   emitVisible(false)
 }
 </script>
-
-<style lang="scss" scoped>
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.movementCreate__option {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-</style>

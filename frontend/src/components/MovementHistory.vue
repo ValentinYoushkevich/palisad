@@ -1,6 +1,6 @@
 <template>
   <div class="movementHistory">
-    <div v-if="isLoading" class="movementHistory__loading">
+    <div v-if="isLoading" class="flex justify-center py-3">
       <ProgressSpinner style="width: 30px; height: 30px" />
     </div>
 
@@ -11,7 +11,7 @@
       <Column header="Тип">
         <template #body="{ data }">
           <span>{{ data.type_name || data.type_id || '—' }}</span>
-          <Tag v-if="data._pending" class="movementHistory__pendingTag" severity="warning" value="Ожидает" />
+          <Tag v-if="data._pending" class="ml-1.5" severity="warning" value="Ожидает" />
         </template>
       </Column>
       <Column header="Откуда → Куда">
@@ -19,7 +19,7 @@
           <span v-if="data.from_location_name || data.to_location_name">
             {{ data.from_location_name || '—' }} → {{ data.to_location_name || '—' }}
           </span>
-          <span v-else class="movementHistory__muted">—</span>
+          <span v-else class="text-gray-500">—</span>
         </template>
       </Column>
       <Column header="Кол-во">
@@ -78,19 +78,3 @@ function formatDate(value) {
   return new Date(value).toLocaleDateString('ru-RU')
 }
 </script>
-
-<style lang="scss" scoped>
-.movementHistory__loading {
-  display: flex;
-  justify-content: center;
-  padding: 12px 0;
-}
-
-.movementHistory__pendingTag {
-  margin-left: 6px;
-}
-
-.movementHistory__muted {
-  color: #6b7280;
-}
-</style>

@@ -6,11 +6,11 @@
     style="width: 440px"
     @update:visible="emitVisible"
   >
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="editName">Название</label>
       <InputText id="editName" v-model="name" class="w-full" />
     </div>
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="editAddress">Адрес</label>
       <Textarea id="editAddress" v-model="address" class="w-full" rows="2" />
     </div>
@@ -68,12 +68,3 @@ async function handleSave() {
   emitVisible(false)
 }
 </script>
-
-<style lang="scss" scoped>
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-</style>

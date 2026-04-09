@@ -1,6 +1,6 @@
 <template>
-  <section class="staffPage">
-    <div class="staffPage__header">
+  <section class="flex flex-col gap-3">
+    <div class="flex items-center justify-between">
       <h2>Сотрудники</h2>
       <Button
         v-if="authStore.canManageStaff"
@@ -27,7 +27,7 @@
       </Column>
       <Column v-if="authStore.canManageStaff" header="Действия">
         <template #body="{ data }">
-          <div class="staffPage__actions">
+          <div class="flex gap-1">
             <Button icon="pi pi-pencil" text @click="openEdit(data)" />
             <Button
               :icon="toggleIcon(data)"
@@ -126,22 +126,3 @@ async function handleUpdated() {
   await staffStore.fetchUsers()
 }
 </script>
-
-<style lang="scss" scoped>
-.staffPage {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.staffPage__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.staffPage__actions {
-  display: flex;
-  gap: 4px;
-}
-</style>

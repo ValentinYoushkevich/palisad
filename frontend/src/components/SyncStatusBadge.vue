@@ -1,18 +1,18 @@
 <template>
-  <div class="syncBadge">
-    <div v-if="!isOnline" class="syncBadge__state syncBadge__state--offline">
+  <div class="flex items-center gap-1.5">
+    <div v-if="!isOnline" class="flex items-center gap-1 text-xs text-amber-500">
       <i class="pi pi-wifi" />
       <span>Офлайн</span>
     </div>
 
-    <div v-else-if="syncStatus === 'syncing'" class="syncBadge__state syncBadge__state--syncing">
+    <div v-else-if="syncStatus === 'syncing'" class="flex items-center gap-1 text-xs text-blue-500">
       <i class="pi pi-spin pi-spinner" />
       <span>Синхронизация...</span>
     </div>
 
     <button
       v-else-if="syncStatus === 'error'"
-      class="syncBadge__state syncBadge__state--error"
+      class="flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-xs text-red-500"
       type="button"
       @click="handleRetry"
     >
@@ -22,7 +22,7 @@
 
     <button
       v-else-if="pendingCount > 0"
-      class="syncBadge__state syncBadge__state--pending"
+      class="flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-xs text-amber-500"
       type="button"
       @click="handleForceSync"
     >
@@ -30,7 +30,7 @@
       <span>{{ pendingCount }}</span>
     </button>
 
-    <div v-else-if="isOnline" class="syncBadge__state syncBadge__state--ok">
+    <div v-else-if="isOnline" class="flex items-center gap-1 text-xs text-emerald-500">
       <i class="pi pi-check-circle" />
     </div>
 
@@ -64,46 +64,3 @@ async function handleRetry() {
   await forceSync()
 }
 </script>
-
-<style lang="scss" scoped>
-.syncBadge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.syncBadge__state {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-}
-
-.syncBadge__state--offline {
-  color: #f59e0b;
-}
-
-.syncBadge__state--syncing {
-  color: #3b82f6;
-}
-
-.syncBadge__state--error {
-  color: #ef4444;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-}
-
-.syncBadge__state--pending {
-  color: #f59e0b;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-}
-
-.syncBadge__state--ok {
-  color: #10b981;
-}
-</style>

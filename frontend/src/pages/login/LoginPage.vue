@@ -1,15 +1,15 @@
 <template>
-  <section class="loginPage">
-    <form class="loginCard" @submit.prevent="submitLogin">
-      <h1 class="loginCard__title">Palisade</h1>
-      <p class="loginCard__subtitle">Войдите в систему</p>
+  <section class="flex min-h-screen items-center justify-center bg-gray-100 p-6">
+    <form class="flex w-full max-w-[520px] flex-col gap-3.5 px-2" @submit.prevent="submitLogin">
+      <h1 class="m-0 text-center text-xl font-bold">Palisade</h1>
+      <p class="mb-5 mt-0 text-center text-sm text-gray-500">Войдите в систему</p>
 
-      <div class="loginCard__field">
+      <div class="loginCard__field flex flex-col gap-1.5">
         <label for="email">Email</label>
         <InputText id="email" v-model="email" type="email" autocomplete="username" />
       </div>
 
-      <div class="loginCard__field">
+      <div class="loginCard__field flex flex-col gap-1.5">
         <label for="password">Пароль</label>
         <Password id="password" v-model="password" :feedback="false" toggleMask :inputProps="{ autocomplete: 'current-password' }" />
       </div>
@@ -20,7 +20,7 @@
 
       <button
         v-tooltip.top="'Функция будет доступна в следующем релизе'"
-        class="loginCard__forgot"
+        class="cursor-not-allowed self-center border-none bg-transparent text-xs text-gray-400 underline"
         type="button"
         disabled
       >
@@ -69,44 +69,6 @@ async function submitLogin() {
 </script>
 
 <style lang="scss" scoped>
-.loginPage {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: #f3f4f6;
-}
-
-.loginCard {
-  width: 100%;
-  max-width: 520px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 0 8px;
-}
-
-.loginCard__title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.loginCard__subtitle {
-  margin: 0 0 20px;
-  font-size: 13px;
-  color: #6b7280;
-  text-align: center;
-}
-
-.loginCard__field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
 .loginCard__field :deep(.p-password) {
   width: 100%;
 }
@@ -115,13 +77,4 @@ async function submitLogin() {
   width: 100%;
 }
 
-.loginCard__forgot {
-  border: none;
-  background: transparent;
-  color: #9ca3af;
-  font-size: 12px;
-  text-decoration: underline;
-  cursor: not-allowed;
-  align-self: center;
-}
 </style>

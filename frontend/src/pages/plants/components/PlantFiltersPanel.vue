@@ -1,5 +1,5 @@
 <template>
-  <div class="plantFilters">
+  <div class="grid grid-cols-6 gap-2">
     <Dropdown
       v-model="filters.status"
       :options="STATUS_OPTIONS"
@@ -64,11 +64,3 @@ function resetFilters() {
   emit('change')
 }
 </script>
-
-<style lang="scss" scoped>
-.plantFilters {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
-}
-</style>

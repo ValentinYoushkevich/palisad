@@ -1,5 +1,5 @@
 <template>
-  <div class="activityFilters">
+  <div class="flex flex-wrap gap-2">
     <Calendar
       v-model="dateFrom"
       dateFormat="dd.mm.yy"
@@ -70,11 +70,3 @@ function onFilterChange() {
   emit('change')
 }
 </script>
-
-<style lang="scss" scoped>
-.activityFilters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-</style>

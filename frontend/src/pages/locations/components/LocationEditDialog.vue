@@ -6,11 +6,11 @@
     style="width: 420px"
     @update:visible="emitVisible"
   >
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="editLocationName">Название</label>
       <InputText id="editLocationName" v-model="form.name" class="w-full" />
     </div>
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="editLocationType">Тип</label>
       <Dropdown
         id="editLocationType"
@@ -107,12 +107,3 @@ async function handleSave() {
   emitVisible(false)
 }
 </script>
-
-<style lang="scss" scoped>
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-</style>

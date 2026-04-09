@@ -1,22 +1,22 @@
 <template>
-  <section class="scannerPage">
+  <section class="flex flex-col gap-3">
     <h2>Сканирование QR-кода</h2>
 
     <div v-if="!manualMode">
       <QrScanner @error="handleCameraError" @scanned="handleScanned" />
-      <div class="scannerPage__center">
+      <div class="mt-2 flex justify-center">
         <Button label="Ввести код вручную" text @click="manualMode = true" />
       </div>
     </div>
 
-    <div v-else class="scannerPage__manual">
-      <div class="field">
+    <div v-else class="max-w-[520px]">
+      <div class="flex flex-col gap-1.5">
         <label for="manualCode">Числовой код растения</label>
-        <div class="scannerPage__manualRow">
+        <div class="flex gap-2">
           <InputText
             id="manualCode"
             v-model="manualCode"
-            class="scannerPage__manualInput"
+            class="flex-1"
             placeholder="Введите код..."
             @keyup.enter="handleManualSearch"
           />
@@ -85,36 +85,3 @@ async function handleManualSearch() {
   isSearching.value = false
 }
 </script>
-
-<style lang="scss" scoped>
-.scannerPage {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.scannerPage__center {
-  display: flex;
-  justify-content: center;
-  margin-top: 8px;
-}
-
-.scannerPage__manual {
-  max-width: 520px;
-}
-
-.scannerPage__manualRow {
-  display: flex;
-  gap: 8px;
-}
-
-.scannerPage__manualInput {
-  flex: 1;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-</style>

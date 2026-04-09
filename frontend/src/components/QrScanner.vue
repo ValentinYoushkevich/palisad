@@ -1,10 +1,10 @@
 <template>
-  <div class="qrScanner">
-    <video ref="videoEl" class="qrScanner__video">
+  <div class="flex flex-col gap-2">
+    <video ref="videoEl" class="max-h-[300px] w-full rounded-lg object-cover">
       <track kind="captions" label="captions" src="" srclang="ru">
     </video>
-    <div v-if="errorText" class="qrScanner__error">{{ errorText }}</div>
-    <div v-if="isScanning" class="qrScanner__hint">Наведите камеру на QR-код</div>
+    <div v-if="errorText" class="text-center text-sm text-red-600">{{ errorText }}</div>
+    <div v-if="isScanning" class="text-center text-sm text-gray-500">Наведите камеру на QR-код</div>
   </div>
 </template>
 
@@ -60,30 +60,3 @@ onUnmounted(() => {
   isScanning.value = false
 })
 </script>
-
-<style lang="scss" scoped>
-.qrScanner {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.qrScanner__video {
-  width: 100%;
-  max-height: 300px;
-  object-fit: cover;
-  border-radius: 8px;
-}
-
-.qrScanner__error {
-  color: #dc2626;
-  text-align: center;
-  font-size: 14px;
-}
-
-.qrScanner__hint {
-  color: #6b7280;
-  text-align: center;
-  font-size: 14px;
-}
-</style>

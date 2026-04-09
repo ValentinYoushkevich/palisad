@@ -6,11 +6,11 @@
     style="width: 440px"
     @update:visible="emitVisible"
   >
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="editName">Имя</label>
       <InputText id="editName" v-model="form.name" class="w-full" />
     </div>
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="editRole">Роль</label>
       <Dropdown
         id="editRole"
@@ -21,7 +21,7 @@
         optionValue="value"
       />
     </div>
-    <div class="field">
+    <div class="mb-3 flex flex-col gap-1.5">
       <label for="editEmail">Email</label>
       <InputText id="editEmail" v-model="form.email" class="w-full" type="email" />
     </div>
@@ -116,12 +116,3 @@ async function handleSave() {
   emit('updated')
 }
 </script>
-
-<style lang="scss" scoped>
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-</style>

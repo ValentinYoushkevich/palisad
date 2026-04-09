@@ -1,6 +1,6 @@
 <template>
-  <section class="activityPage">
-    <div class="activityPage__head">
+  <section class="flex flex-col gap-3">
+    <div class="flex items-center justify-between">
       <h2>Лента активности</h2>
       <Button
         v-if="activityStore.hasActiveFilters"
@@ -16,22 +16,22 @@
       {{ activityStore.activityError }}
     </Message>
 
-    <div v-if="activityStore.isLoading && !activityStore.logs.length" class="activityPage__loading">
+    <div v-if="activityStore.isLoading && !activityStore.logs.length" class="flex justify-center py-6">
       <ProgressSpinner style="width: 40px; height: 40px" />
     </div>
 
-    <div v-else-if="!activityStore.logs.length" class="activityPage__empty">
+    <div v-else-if="!activityStore.logs.length" class="text-center text-sm text-gray-500">
       Событий нет
     </div>
 
-    <div v-else class="activityPage__list">
+    <div v-else class="flex flex-col gap-2">
       <ActivityLogItem
         v-for="log in activityStore.logs"
         :key="log.id"
         :log="log"
       />
 
-      <div class="activityPage__footer">
+      <div class="mt-2 flex justify-center">
         <Button
           v-if="activityStore.logs.length < activityStore.pagination.total"
           :loading="activityStore.isLoading"
@@ -39,7 +39,7 @@
           outlined
           @click="handleLoadMore"
         />
-        <span v-else class="activityPage__empty">
+        <span v-else class="text-center text-sm text-gray-500">
           Показано все {{ activityStore.pagination.total }} событий
         </span>
       </div>
@@ -72,40 +72,3 @@ async function handleLoadMore() {
   await activityStore.loadMore()
 }
 </script>
-
-<style lang="scss" scoped>
-.activityPage {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.activityPage__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.activityPage__loading {
-  display: flex;
-  justify-content: center;
-  padding: 24px 0;
-}
-
-.activityPage__empty {
-  text-align: center;
-  color: #6b7280;
-}
-
-.activityPage__list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.activityPage__footer {
-  display: flex;
-  justify-content: center;
-  margin-top: 8px;
-}
-</style>
