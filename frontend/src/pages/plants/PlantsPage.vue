@@ -28,10 +28,18 @@
       lazy
       paginator
       :rows="plantsStore.pagination.perPage"
+      :rowsPerPageOptions="[20, 50, 100]"
       :totalRecords="plantsStore.pagination.total"
+      paginatorTemplate="RowsPerPageDropdown FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink"
       stripedRows
       @page="onPage"
     >
+      <template #empty>
+        <div class="py-6 text-center text-sm text-slate-500">
+          Растения не добавлены
+        </div>
+      </template>
+
       <Column header="QR / Код">
         <template #body="{ data }">
           <div class="font-mono">{{ data.numeric_code }}</div>
@@ -143,6 +151,7 @@ async function handleFilterChange() {
 }
 
 async function onPage(event) {
+  plantsStore.pagination.perPage = event.rows
   plantsStore.pagination.page = event.page + 1
   await plantsStore.fetchPlants(plantsStore.activeFilters)
 }

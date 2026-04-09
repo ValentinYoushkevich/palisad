@@ -4,7 +4,21 @@
       <ProgressSpinner style="width: 30px; height: 30px" />
     </div>
 
-    <DataTable v-else :value="movements" size="small" stripedRows>
+    <DataTable
+      v-else
+      :value="movements"
+      :rows="20"
+      :rowsPerPageOptions="[20, 50, 100]"
+      paginator
+      size="small"
+      stripedRows
+    >
+      <template #empty>
+        <div class="py-6 text-center text-sm text-slate-500">
+          Движения не добавлены
+        </div>
+      </template>
+
       <Column header="Дата">
         <template #body="{ data }">{{ formatDate(data.created_at) }}</template>
       </Column>

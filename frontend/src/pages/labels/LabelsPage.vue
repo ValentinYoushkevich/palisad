@@ -13,10 +13,19 @@
           v-model:selection="selectedPlants"
           :value="plantsStore.plants"
           dataKey="id"
+          :rows="20"
+          :rowsPerPageOptions="[20, 50, 100]"
+          paginator
           selectionMode="multiple"
           size="small"
           stripedRows
         >
+          <template #empty>
+            <div class="py-6 text-center text-sm text-slate-500">
+              Растения не добавлены
+            </div>
+          </template>
+
           <Column selectionMode="multiple" style="width: 3rem" />
           <Column field="numeric_code" header="Код" />
           <Column header="Вид / Сорт">

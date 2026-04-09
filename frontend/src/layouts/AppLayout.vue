@@ -78,11 +78,6 @@ const commonNavItems = computed(() => {
       visible: authStore.isAuthenticated && !nurseryStore.nursery
     },
     {
-      to: '/nursery/settings',
-      label: 'Питомник',
-      visible: authStore.isAuthenticated && Boolean(nurseryStore.nursery)
-    },
-    {
       to: '/locations',
       label: 'Локации',
       visible: false
@@ -131,8 +126,8 @@ const adminNavItems = computed(() => {
     },
     {
       to: '/nursery/settings',
-      label: 'Подписка',
-      visible: authStore.isOwner && Boolean(nurseryStore.nursery)
+      label: 'Питомник',
+      visible: authStore.isAuthenticated && Boolean(nurseryStore.nursery)
     },
     {
       to: '/staff',

@@ -12,7 +12,21 @@
 
     <Message v-if="staffStore.staffError" severity="error">{{ staffStore.staffError }}</Message>
 
-    <DataTable :value="staffStore.users" :loading="staffStore.isLoading" stripedRows>
+    <DataTable
+      :value="staffStore.users"
+      :loading="staffStore.isLoading"
+      :rows="20"
+      :rowsPerPageOptions="[20, 50, 100]"
+      paginator
+      stripedRows
+      size="small"
+    >
+      <template #empty>
+        <div class="py-6 text-center text-sm text-slate-500">
+          Сотрудники не добавлены
+        </div>
+      </template>
+
       <Column field="name" header="Имя" />
       <Column field="role" header="Роль">
         <template #body="{ data }">
