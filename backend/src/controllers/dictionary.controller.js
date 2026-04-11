@@ -18,9 +18,17 @@ export async function searchSpecies(req, res, next) {
   }
 }
 
-export async function createSpecies(req, res, next) {
+export function createSpecies(req, res, next) {
+  return handleAttachSpecies(req, res, next);
+}
+
+export function attachSpeciesByName(req, res, next) {
+  return handleAttachSpecies(req, res, next);
+}
+
+async function handleAttachSpecies(req, res, next) {
   try {
-    const result = await dictionaryService.createSpecies(req.params.nurseryId, req.body);
+    const result = await dictionaryService.attachSpeciesByName(req.params.nurseryId, req.body);
     return res.status(result.alreadyExists ? 200 : 201).json(result);
   } catch (err) {
     return next(err);

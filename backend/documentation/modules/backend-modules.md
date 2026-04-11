@@ -1,7 +1,7 @@
 # Палисад MVP — Backend Modules
 
 **Стек:** Node.js · Express · PostgreSQL · Knex.js · Argon2id · JWT (HttpOnly cookie) · Zod · Winston · node-cron · pdfkit · qrcode · GBIF API
-**Версия:** 0.5 · 2026-04-07
+**Версия:** 0.6 · 2026-04-11
 
 ---
 
@@ -39,7 +39,7 @@ db/
 
 ## MODULE_1 — База данных и миграции
 
-**Описание:** PostgreSQL + Knex. Полная схема в одной миграции. Включает все таблицы: `container_types` с системными типами (P9, C1-C35, ОКС, Прикоп, Теплица, Холодильник), `plants.container_id` как FK, `plants.variety`, `species` с GBIF-полями, `movement_types`, `plants.numeric_code`, уровень `place` в `locations`. Seed: план `free`, системные типы движений, системные типы контейнеров, dev-аккаунт.
+**Описание:** PostgreSQL + Knex. Базовая схема — миграция `init_mvp_schema`; рефакторинг видов — миграция `refactor_species_to_global_catalog`: таблицы `species_catalog`, `nursery_species`, `plants.nursery_species_id`. Также: `container_types` с системными типами (P9, C1-C35, ОКС, Прикоп, Теплица, Холодильник), `plants.container_id`, `plants.variety`, `movement_types`, `plants.numeric_code`, уровень `place` в `locations`. Seed: план `free`, системные типы движений, системные типы контейнеров, dev-аккаунт.
 
 **Зависит от:** MODULE_0
 
@@ -133,8 +133,8 @@ db/
 
 **Описание:** Четыре справочника питомника. Управление — `owner` и `agronomist`.
 
-**Виды (species):**
-Добавление только онлайн через GBIF. Бэкенд проксирует `https://api.gbif.org/v1/species/suggest?q={query}&limit=10`. При сохранении проверяет `UNIQUE (nursery_id, gbif_id)` — если вид уже есть, возвращает существующую запись с `alreadyExists: true`. Деактивация вместо удаления если привязан к растениям.
+**Виды (`species_catalog` + `nursery_species`):**
+Глобальный каталог таксонов и привязка к питомнику. Поиск подсказок: локальный каталог + GBIF (`/species/search`). Добавление в питомник: `POST .../species/attach-by-name` (или `POST .../species`) с `scientific_name` и `display_name_ru` — бэкенд ищет в `species_catalog`, при отсутствии вызывает GBIF `/species/match` и при необходимости `/species/search`, upsert в каталог, затем строка в `nursery_species`. Повтор в том же питомнике — `alreadyExists: true`. Деактивация записи справочника вместо физического удаления.
 
 **Теги (tags):**
 CRUD с цветом `#RRGGBB`. Создание проверяет `feature_tags`. Деактивация вместо удаления.
@@ -153,6 +153,7 @@ CRUD кастомных типов. Системные (`is_system = true`) за
 - `GET /api/nurseries/:nurseryId/species`
 - `GET /api/nurseries/:nurseryId/species/search?q=`
 - `POST /api/nurseries/:nurseryId/species`
+- `POST /api/nurseries/:nurseryId/species/attach-by-name`
 - `PATCH /api/nurseries/:nurseryId/species/:id`
 - `DELETE /api/nurseries/:nurseryId/species/:id`
 - `GET /api/nurseries/:nurseryId/tags`
@@ -168,13 +169,13 @@ CRUD кастомных типов. Системные (`is_system = true`) за
 - `PATCH /api/nurseries/:nurseryId/container-types/:id`
 - `DELETE /api/nurseries/:nurseryId/container-types/:id`
 
-**DB / Store:** `species`, `tags`, `movement_types`, `container_types`
+**DB / Store:** `species_catalog`, `nursery_species`, `tags`, `movement_types`, `container_types`
 
 ---
 
 ## MODULE_9 — Реестр растений
 
-**Описание:** CRUD растений. При создании генерируется `qr_code` и `numeric_code`. Поля `variety` (сорт) и `container_id` (текущий тип контейнера). Бэкенд опционально возвращает предупреждение о дубликате сорта для данного вида. Смена контейнера — через операцию `transplant` (MODULE_10), `plants.container_id` обновляется. Поиск по QR (`/by-qr/:qrCode`) и по числовому коду (`/by-code/:numericCode`). Фильтрация: вид, статус, локация, тег, тип контейнера, числовой код, текстовый поиск. Мягкое удаление. Массовый ввод. Проверка `plant_limit`.
+**Описание:** CRUD растений. При создании генерируется `qr_code` и `numeric_code`. Поле вида — `nursery_species_id` (FK на `nursery_species`); в API по-прежнему передаётся как `speciesId`. Поля `variety` (сорт) и `container_id` (текущий тип контейнера). Бэкенд опционально возвращает предупреждение о дубликате сорта для данного вида. Смена контейнера — через операцию `transplant` (MODULE_10), `plants.container_id` обновляется. Поиск по QR (`/by-qr/:qrCode`) и по числовому коду (`/by-code/:numericCode`). Фильтрация: вид, статус, локация, тег, тип контейнера, числовой код, текстовый поиск. Мягкое удаление. Массовый ввод. Проверка `plant_limit`.
 
 **Зависит от:** MODULE_7, MODULE_8
 

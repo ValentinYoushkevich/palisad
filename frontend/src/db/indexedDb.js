@@ -3,7 +3,7 @@ import Dexie from 'dexie'
 export const db = new Dexie('PalisadDB')
 
 db.version(1).stores({
-  plants: 'id, nursery_id, species_id, location_id, container_id, qr_code, numeric_code, status, deleted_at',
+  plants: 'id, nursery_id, nursery_species_id, location_id, container_id, qr_code, numeric_code, status, deleted_at',
   locations: 'id, nursery_id, parent_id, type',
   species: 'id, nursery_id, gbif_id',
   tags: 'id, nursery_id, is_active',

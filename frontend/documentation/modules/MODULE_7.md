@@ -14,6 +14,8 @@
 
 ## Шаг 2. Pinia store
 
+В фильтрах и формах поле **`speciesId`** — UUID строки справочника вида питомника (ответ `GET /species`, соответствует `nursery_species.id` на бэкенде). У объектов растения в списке поле **`nursery_species_id`**.
+
 `src/stores/plants.store.js`:
 
 ```js
@@ -47,7 +49,7 @@ export const usePlantsStore = defineStore('plants', {
       let result = state.plants;
       const f = state.activeFilters;
       if (f.status)      result = result.filter(p => p.status === f.status);
-      if (f.speciesId)   result = result.filter(p => p.species_id === f.speciesId);
+      if (f.speciesId)   result = result.filter(p => p.nursery_species_id === f.speciesId);
       if (f.locationId)  result = result.filter(p => p.location_id === f.locationId);
       if (f.tagId)       result = result.filter(p => p.tags?.some(t => t.id === f.tagId));
       if (f.containerId) result = result.filter(p => p.container_id === f.containerId);

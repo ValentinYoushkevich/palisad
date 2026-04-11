@@ -79,7 +79,10 @@ export const useSpeciesStore = defineStore('species', {
       this.isLoading = true
 
       try {
-        const response = await http.post(`/nurseries/${nurseryStore.nurseryId}/species`, formData)
+        const response = await http.post(
+          `/nurseries/${nurseryStore.nurseryId}/species/attach-by-name`,
+          formData
+        )
         const data = response?.data || null
 
         if (data && !data.alreadyExists) {

@@ -7,7 +7,8 @@
 ## Описание
 
 Модуль включает 4 справочника:
-- `species` (через GBIF, только онлайн),
+
+- виды: глобальный каталог `species_catalog` + привязка к питомнику `nursery_species` (данные GBIF через `src/services/gbif.client.js`),
 - `tags`,
 - `movement_types`,
 - `container_types`.
@@ -20,7 +21,8 @@
 
 - `GET /api/nurseries/:nurseryId/species`
 - `GET /api/nurseries/:nurseryId/species/search?q=`
-- `POST /api/nurseries/:nurseryId/species`
+- `POST /api/nurseries/:nurseryId/species` (тело: `attachSpeciesByNameSchema`, см. ниже)
+- `POST /api/nurseries/:nurseryId/species/attach-by-name` (алиас того же сценария)
 - `PATCH /api/nurseries/:nurseryId/species/:id`
 - `DELETE /api/nurseries/:nurseryId/species/:id`
 
@@ -43,11 +45,13 @@
 
 ## Канонические правила
 
-- `species`:
-  - создание только через GBIF (`gbif_id`, `scientific_name`, `display_name_ru`);
-  - `UNIQUE (nursery_id, gbif_id)`;
-  - при повторном добавлении вернуть существующий вид + `alreadyExists: true`;
-  - удаление через деактивацию (`is_active=false`) при использовании.
+- **Виды (`species_catalog` + `nursery_species`):**
+  - добавление в питомник: `POST .../species` или `POST .../species/attach-by-name` с полями `scientific_name`, `display_name_ru` (Zod: `attachSpeciesByNameSchema`);
+  - бэкенд ищет таксон в `species_catalog` по латинскому имени; при отсутствии — GBIF `/species/match`, при низкой уверенности — fallback `/species/search`;
+  - запись в `species_catalog` по уникальному `gbif_usage_key`; привязка к питомнику — `UNIQUE (nursery_id, species_catalog_id)`;
+  - при повторном добавлении того же таксона в тот же питомник возвращается существующая строка + `alreadyExists: true` (и `source`, см. `dictionary.service.js`);
+  - список для UI — join `nursery_species` ↔ `species_catalog`; в ответе по-прежнему отдаются поля совместимости (`gbif_id` как usage key, `gbif_family`/`gbif_genus` из каталога);
+  - удаление справочника вида — деактивация (`is_active=false`).
 - `tags`:
   - цвет строго `#RRGGBB`;
   - создание требует `feature_tags`;
@@ -66,8 +70,8 @@
 
 | # | Проверка | Как проверить |
 |---|----------|---------------|
-| 1 | Виды добавляются через GBIF-поиск | `GET .../species/search?q=` + `POST .../species` |
-| 2 | Дубли по `gbif_id` не создаются | Повторный `POST .../species` возвращает `alreadyExists=true` |
+| 1 | Поиск подсказок и добавление вида | `GET .../species/search?q=` (локальный каталог + GBIF) + `POST .../species/attach-by-name` |
+| 2 | Дубль в том же питомнике не создаётся | Повторный `POST` с тем же таксоном → `alreadyExists=true` |
 | 3 | Теги требуют `feature_tags` | `POST .../tags` на free -> 403 |
 | 4 | Системные `movement_types` защищены | `PATCH/DELETE` системного типа -> 400/403 |
 | 5 | Системные `container_types` защищены | `PATCH/DELETE` системного типа -> 400/403 |

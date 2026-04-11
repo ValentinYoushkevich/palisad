@@ -1,6 +1,9 @@
 -- ============================================================
 -- Палисад — предварительная схема БД (PostgreSQL)
--- Версия: MVP v0.7
+-- Версия: MVP v0.8
+-- Изменения v0.8:
+--   - виды: глобальный species_catalog + привязка nursery_species (вместо per-nursery species)
+--   - plants.nursery_species_id → FK на nursery_species (вместо plants.species_id → species)
 -- Изменения v0.7:
 --   - добавлена таблица container_types (справочник типов контейнеров)
 --   - plants.container_id → FK на container_types
@@ -102,31 +105,38 @@ CREATE TABLE locations (
 );
 
 -- ------------------------------------------------------------
--- Справочник видов питомника (через GBIF)
+-- Глобальный каталог видов (GBIF) + привязка к питомнику
 --
--- gbif_id        — уникальный ключ из GBIF (usageKey)
--- scientific_name — латинское название из GBIF
--- display_name_ru — русское название, заданное пользователем
--- gbif_family    — семейство из GBIF (для отображения)
--- gbif_genus     — род из GBIF (для отображения)
---
--- Контроль дублей: UNIQUE (nursery_id, gbif_id)
--- Деактивация вместо удаления если вид привязан к растениям.
--- Добавление только онлайн через GBIF suggest API.
+-- species_catalog — один таксон на всё приложение (по gbif_usage_key из GBIF usageKey).
+-- nursery_species — какой вид «включён» в справочник питомника; русское имя задаётся здесь.
+-- Контроль дублей: UNIQUE (gbif_usage_key) в каталоге; UNIQUE (nursery_id, species_catalog_id)
+-- у привязки. Растение ссылается на строку nursery_species (plants.nursery_species_id).
 -- ------------------------------------------------------------
 
-CREATE TABLE species (
-  id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  nursery_id      UUID        NOT NULL REFERENCES nurseries(id) ON DELETE CASCADE,
-  gbif_id         INTEGER     NOT NULL,
-  scientific_name TEXT        NOT NULL,
-  display_name_ru TEXT        NOT NULL,
-  gbif_family     TEXT,
-  gbif_genus      TEXT,
-  is_active       BOOLEAN     NOT NULL DEFAULT true,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (nursery_id, gbif_id)
+CREATE TABLE species_catalog (
+  id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  gbif_usage_key   INTEGER     NOT NULL UNIQUE,
+  scientific_name  TEXT        NOT NULL,
+  canonical_name   TEXT,
+  authorship       TEXT,
+  rank             TEXT,
+  taxonomic_status TEXT,
+  family           TEXT,
+  genus            TEXT,
+  source           TEXT        NOT NULL DEFAULT 'gbif',
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE nursery_species (
+  id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  nursery_id          UUID        NOT NULL REFERENCES nurseries(id) ON DELETE CASCADE,
+  species_catalog_id  UUID        NOT NULL REFERENCES species_catalog(id) ON DELETE CASCADE,
+  display_name_ru     TEXT        NOT NULL,
+  is_active           BOOLEAN     NOT NULL DEFAULT true,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (nursery_id, species_catalog_id)
 );
 
 -- ------------------------------------------------------------
@@ -219,27 +229,28 @@ CREATE TABLE container_types (
 --
 -- Создание только онлайн (ограничение на уровне приложения).
 -- Мягкое удаление: deleted_at.
+-- nursery_species_id — выбранный вид из справочника питомника (см. nursery_species).
 -- ------------------------------------------------------------
 
 CREATE TABLE plants (
-  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  nursery_id    UUID        NOT NULL REFERENCES nurseries(id) ON DELETE CASCADE,
-  species_id    UUID        REFERENCES species(id) ON DELETE SET NULL,
-  location_id   UUID        REFERENCES locations(id) ON DELETE SET NULL,
-  container_id  UUID        REFERENCES container_types(id) ON DELETE SET NULL,
-  qr_code       TEXT        NOT NULL UNIQUE,
-  numeric_code  TEXT        NOT NULL UNIQUE,
-  variety       TEXT,
-  status        TEXT        NOT NULL DEFAULT 'growing'
-                            CONSTRAINT chk_plants_status
-                            CHECK (status IN ('growing', 'storage', 'sold', 'written_off')),
-  planted_at    DATE,
-  source        TEXT        CONSTRAINT chk_plants_source
-                            CHECK (source IS NULL OR source IN ('own', 'purchased')),
-  notes         TEXT,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  deleted_at    TIMESTAMPTZ
+  id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  nursery_id          UUID        NOT NULL REFERENCES nurseries(id) ON DELETE CASCADE,
+  nursery_species_id  UUID        REFERENCES nursery_species(id) ON DELETE SET NULL,
+  location_id         UUID        REFERENCES locations(id) ON DELETE SET NULL,
+  container_id        UUID        REFERENCES container_types(id) ON DELETE SET NULL,
+  qr_code             TEXT        NOT NULL UNIQUE,
+  numeric_code        TEXT        NOT NULL UNIQUE,
+  variety             TEXT,
+  status              TEXT        NOT NULL DEFAULT 'growing'
+                                  CONSTRAINT chk_plants_status
+                                  CHECK (status IN ('growing', 'storage', 'sold', 'written_off')),
+  planted_at          DATE,
+  source              TEXT        CONSTRAINT chk_plants_source
+                                  CHECK (source IS NULL OR source IN ('own', 'purchased')),
+  notes               TEXT,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at          TIMESTAMPTZ
 );
 
 CREATE TABLE plant_tags (
@@ -325,11 +336,13 @@ CREATE INDEX idx_plants_status         ON plants(status)          WHERE deleted_
 CREATE INDEX idx_plants_qr             ON plants(qr_code);
 CREATE INDEX idx_plants_numeric_code   ON plants(numeric_code);
 CREATE INDEX idx_plants_active         ON plants(nursery_id)      WHERE deleted_at IS NULL;
-CREATE INDEX idx_plants_species        ON plants(species_id)      WHERE deleted_at IS NULL;
+CREATE INDEX idx_plants_nursery_species ON plants(nursery_species_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_plants_container      ON plants(container_id)    WHERE deleted_at IS NULL;
 
-CREATE INDEX idx_species_nursery       ON species(nursery_id);
-CREATE INDEX idx_species_gbif          ON species(nursery_id, gbif_id);
+CREATE INDEX idx_species_catalog_usage_key ON species_catalog(gbif_usage_key);
+CREATE INDEX idx_species_catalog_scientific_name ON species_catalog(lower(scientific_name));
+CREATE INDEX idx_nursery_species_nursery ON nursery_species(nursery_id);
+CREATE INDEX idx_nursery_species_catalog ON nursery_species(species_catalog_id);
 
 CREATE INDEX idx_container_types_nursery ON container_types(nursery_id);
 

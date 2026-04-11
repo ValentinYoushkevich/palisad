@@ -9,12 +9,9 @@ const containerKindSchema = z.enum([
   'greenhouse',
 ]);
 
-export const createSpeciesSchema = z.object({
-  gbif_id: z.number().int().positive(),
+export const attachSpeciesByNameSchema = z.object({
   scientific_name: z.string().min(1).max(255),
   display_name_ru: z.string().min(1).max(255),
-  gbif_family: z.string().max(255).optional().nullable(),
-  gbif_genus: z.string().max(255).optional().nullable(),
 });
 
 export const updateSpeciesSchema = z.object({

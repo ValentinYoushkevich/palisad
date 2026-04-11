@@ -103,12 +103,13 @@ function handleSearch() {
 }
 
 async function handleSave() {
+  if (!selectedGbif.value) {
+    return
+  }
+
   const result = await speciesStore.createSpecies({
-    gbifId: selectedGbif.value.gbifId,
-    scientificName: selectedGbif.value.scientificName,
-    displayNameRu: displayNameRu.value,
-    gbifFamily: selectedGbif.value.family,
-    gbifGenus: selectedGbif.value.genus
+    scientific_name: selectedGbif.value.scientificName,
+    display_name_ru: displayNameRu.value.trim()
   })
 
   if (!result?.ok) {

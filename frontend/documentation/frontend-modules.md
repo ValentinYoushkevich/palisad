@@ -1,7 +1,11 @@
 # Palisad MVP - Frontend Modules
 
 **Stack:** Vue 3, PrimeVue, Pinia, Workbox, Dexie.js, zxing-js, pdf-lib, Axios
-**Version:** 0.5 (2026-04-08)
+**Version:** 0.6 (2026-04-11)
+
+## Виды растений (синхронизация с backend)
+
+На сервере таксон хранится в глобальном `species_catalog`, привязка к питомнику — в `nursery_species`. API списка/создания видов отдаёт и принимает поля в **snake_case** (`scientific_name`, `display_name_ru`, `gbif_id` и др.). В формах растений поле **`speciesId`** — это UUID строки справочника питомника (ответ `GET .../species`, по сути `nursery_species.id`). В кэше растений у объекта plant поле **`nursery_species_id`**. Поиск подсказок вида: `GET .../species/search` (локальный каталог + GBIF); сохранение: `POST .../species/attach-by-name` с `scientific_name` и `display_name_ru`.
 
 ## Detalized modules
 Detalization moved to separate files in `frontend/documentation/modules/`:

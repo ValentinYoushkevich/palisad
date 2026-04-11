@@ -51,7 +51,7 @@ export async function createPlant(nurseryId, accountId, data, userId) {
   const numericCode = await generateUniqueNumericCode();
   const plant = await plantRepo.create({
     nursery_id: nurseryId,
-    species_id: data.speciesId ?? null,
+    nursery_species_id: data.speciesId ?? null,
     location_id: data.locationId ?? null,
     container_id: data.containerId ?? null,
     variety: data.variety ?? null,
@@ -80,7 +80,7 @@ export async function bulkCreate(nurseryId, accountId, template, count) {
   for (let i = 0; i < count; i += 1) {
     records.push({
       nursery_id: nurseryId,
-      species_id: template.speciesId ?? null,
+      nursery_species_id: template.speciesId ?? null,
       location_id: template.locationId ?? null,
       container_id: template.containerId ?? null,
       variety: template.variety ?? null,
@@ -98,7 +98,7 @@ export async function bulkCreate(nurseryId, accountId, template, count) {
 export async function updatePlant(nurseryId, id, data, userId) {
   await requirePlant(nurseryId, id);
   const plant = await plantRepo.updateById(id, {
-    species_id: data.speciesId ?? null,
+    nursery_species_id: data.speciesId ?? null,
     location_id: data.locationId ?? null,
     container_id: data.containerId ?? null,
     variety: data.variety ?? null,

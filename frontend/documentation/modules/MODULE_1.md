@@ -22,7 +22,7 @@ import Dexie from 'dexie';
 export const db = new Dexie('PalisadDB');
 
 db.version(1).stores({
-  plants:          'id, nursery_id, species_id, location_id, container_id, qr_code, numeric_code, status, deleted_at',
+  plants:          'id, nursery_id, nursery_species_id, location_id, container_id, qr_code, numeric_code, status, deleted_at',
   locations:       'id, nursery_id, parent_id, type',
   species:         'id, nursery_id, gbif_id',
   tags:            'id, nursery_id, is_active',
@@ -37,6 +37,8 @@ db.version(1).stores({
 export default db;
 ```
 
+> Таблица `species` в IndexedDB хранит ответ `GET /nurseries/:id/species` (строки справочника питомника: `nursery_species` + данные каталога; в объекте по-прежнему есть `gbif_id`, `scientific_name`, `display_name_ru` и т.д.).
+>
 > Индексы в Dexie перечисляются через запятую — только те поля по которым будет фильтрация или сортировка. Остальные данные хранятся в объекте записи.
 
 ---

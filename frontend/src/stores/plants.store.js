@@ -37,7 +37,7 @@ export const usePlantsStore = defineStore('plants', {
       }
 
       if (filters.speciesId) {
-        result = result.filter((item) => item.species_id === filters.speciesId)
+        result = result.filter((item) => item.nursery_species_id === filters.speciesId)
       }
 
       if (filters.locationId) {

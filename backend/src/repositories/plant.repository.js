@@ -4,13 +4,14 @@ export function findAllByNursery(nurseryId, filters = {}) {
   const query = db('plants')
     .where('plants.nursery_id', nurseryId)
     .whereNull('plants.deleted_at')
-    .leftJoin('species', 'plants.species_id', 'species.id')
+    .leftJoin('nursery_species', 'plants.nursery_species_id', 'nursery_species.id')
+    .leftJoin('species_catalog', 'nursery_species.species_catalog_id', 'species_catalog.id')
     .leftJoin('locations', 'plants.location_id', 'locations.id')
     .leftJoin('container_types', 'plants.container_id', 'container_types.id')
     .select(
       'plants.*',
-      'species.scientific_name',
-      'species.display_name_ru',
+      'species_catalog.scientific_name',
+      'nursery_species.display_name_ru',
       'locations.name as location_name',
       'container_types.code as container_code'
     );
@@ -19,7 +20,7 @@ export function findAllByNursery(nurseryId, filters = {}) {
     query.where('plants.status', filters.status);
   }
   if (filters.speciesId) {
-    query.where('plants.species_id', filters.speciesId);
+    query.where('plants.nursery_species_id', filters.speciesId);
   }
   if (filters.locationId) {
     query.where('plants.location_id', filters.locationId);
@@ -33,8 +34,8 @@ export function findAllByNursery(nurseryId, filters = {}) {
 
   if (filters.search) {
     query.where(function search() {
-      this.where('species.scientific_name', 'ilike', `%${filters.search}%`)
-        .orWhere('species.display_name_ru', 'ilike', `%${filters.search}%`)
+      this.where('species_catalog.scientific_name', 'ilike', `%${filters.search}%`)
+        .orWhere('nursery_species.display_name_ru', 'ilike', `%${filters.search}%`)
         .orWhere('plants.variety', 'ilike', `%${filters.search}%`)
         .orWhere('plants.qr_code', 'ilike', `%${filters.search}%`);
     });

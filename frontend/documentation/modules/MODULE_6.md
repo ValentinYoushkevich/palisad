@@ -12,9 +12,11 @@
 
 ---
 
-## Шаг 2. species.store — с GBIF-поиском
+## Шаг 2. species.store — справочник питомника + подсказки (локальный каталог и GBIF)
 
-`src/stores/species.store.js`:
+Бэкенд отдаёт строки **`nursery_species`** с join к **`species_catalog`** (в JSON по-прежнему есть `gbif_id`, `scientific_name`, `display_name_ru` и т.д.). Поиск подсказок: `GET .../species/search` — смесь локальных совпадений и результатов GBIF. Добавление вида в питомник: `POST .../species/attach-by-name` с телом `{ scientific_name, display_name_ru }` (snake_case после валидации на сервере).
+
+`src/stores/species.store.js` (фрагмент):
 
 ```js
 import { defineStore } from 'pinia';
@@ -28,22 +30,28 @@ export const useSpeciesStore = defineStore('species', {
   state: () => ({
     species: [],
     searchResults: [],
+    speciesError: '',
     isSearching: false,
     isLoading: false,
   }),
 
   getters: {
-    activeSpecies: (state) => state.species.filter(s => s.is_active),
+    activeSpecies: (state) => state.species.filter((s) => s.is_active),
   },
 
   actions: {
     async fetchSpecies() {
       const nursery = useNurseryStore();
+      this.speciesError = '';
       this.isLoading = true;
       try {
         const { data } = await http.get(`/nurseries/${nursery.nurseryId}/species`);
         this.species = data;
         await this.syncToLocal(data);
+        return { ok: true };
+      } catch (e) {
+        this.speciesError = e?.response?.data?.error || 'Не удалось загрузить виды.';
+        return { ok: false };
       } finally {
         this.isLoading = false;
       }
@@ -65,23 +73,41 @@ export const useSpeciesStore = defineStore('species', {
         return;
       }
       const nursery = useNurseryStore();
+      this.speciesError = '';
       this.isSearching = true;
       try {
-        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/species/search`, { params: { q: query } });
+        const { data } = await http.get(`/nurseries/${nursery.nurseryId}/species/search`, {
+          params: { q: query },
+        });
         this.searchResults = data;
+      } catch (e) {
+        this.speciesError = e?.response?.data?.error || 'Не удалось выполнить поиск вида.';
       } finally {
         this.isSearching = false;
       }
     }, 400),
 
+    /** Тело: { scientific_name, display_name_ru } — выбранное из подсказки латинское имя + русское имя */
     async createSpecies(formData) {
       const nursery = useNurseryStore();
-      const { data } = await http.post(`/nurseries/${nursery.nurseryId}/species`, formData);
-      if (!data.alreadyExists) {
-        this.species.push(data);
-        await upsertMany('species', [data]);
+      this.speciesError = '';
+      this.isLoading = true;
+      try {
+        const { data } = await http.post(
+          `/nurseries/${nursery.nurseryId}/species/attach-by-name`,
+          formData
+        );
+        if (data && !data.alreadyExists) {
+          this.species.push(data);
+          await upsertMany('species', [data]);
+        }
+        return { ok: true, data };
+      } catch (e) {
+        this.speciesError = e?.response?.data?.error || 'Не удалось создать вид.';
+        return { ok: false, data: null };
+      } finally {
+        this.isLoading = false;
       }
-      return data;
     },
 
     async updateSpecies(id, formData) {
@@ -100,7 +126,7 @@ export const useSpeciesStore = defineStore('species', {
 });
 
 function updateInList(list, updated) {
-  const idx = list.findIndex(i => i.id === updated.id);
+  const idx = list.findIndex((i) => i.id === updated.id);
   if (idx !== -1) list.splice(idx, 1, updated);
 }
 ```
@@ -313,110 +339,40 @@ export const useContainerTypesStore = defineStore('containerTypes', {
 
 ---
 
-## Шаг 7. SpeciesSearchDialog — GBIF flow
+## Шаг 7. SpeciesSearchDialog — подсказки и attach-by-name
 
-`src/pages/catalog/components/SpeciesSearchDialog.vue`:
+Пользователь выбирает подсказку (поля `gbifId`, `scientificName`, `family` из ответа поиска). При сохранении на сервер уходит только латинское и русское имя в **snake_case**; бэкенд сам сопоставляет таксон с глобальным каталогом и GBIF.
+
+`src/pages/catalog/components/SpeciesSearchDialog.vue` (логика):
 
 ```vue
-<template>
-  <Dialog v-model:visible="visible" header="Добавить вид" modal style="width: 520px">
-    <div class="field mb-3">
-      <label>Поиск по GBIF</label>
-      <InputText
-        v-model="query"
-        class="w-full"
-        placeholder="Введите латинское или русское название..."
-        @input="handleSearch"
-      />
-      <small class="text-color-secondary">Минимум 2 символа</small>
-    </div>
-
-    <div v-if="species.isSearching" class="text-center py-3">
-      <ProgressSpinner style="width: 30px; height: 30px" />
-    </div>
-
-    <div v-if="species.searchResults.length" class="mb-3">
-      <div
-        v-for="result in species.searchResults"
-        :key="result.gbifId"
-        class="p-2 border-round cursor-pointer hover:surface-hover mb-1"
-        :class="{ 'surface-100': selectedGbif?.gbifId === result.gbifId }"
-        @click="selectedGbif = result"
-      >
-        <div class="font-medium">{{ result.scientificName }}</div>
-        <div class="text-sm text-color-secondary">{{ result.family }}</div>
-      </div>
-    </div>
-
-    <div v-if="selectedGbif" class="field mb-3">
-      <label>Русское название *</label>
-      <InputText v-model="displayNameRu" class="w-full" placeholder="Например: Сосна обыкновенная" />
-    </div>
-
-    <Message v-if="alreadyExists" severity="info" class="mb-3">
-      Этот вид уже есть в справочнике питомника.
-    </Message>
-
-    <template #footer>
-      <Button label="Отмена" text @click="close" />
-      <Button label="Добавить" :disabled="!selectedGbif || !displayNameRu" :loading="isLoading" @click="handleSave" />
-    </template>
-  </Dialog>
-</template>
-
-<script>
-import { defineOptions, defineProps, defineEmits, ref } from 'vue';
-import { useSpeciesStore } from '@/stores/species.store.js';
-
-defineOptions({ name: 'SpeciesSearchDialog' });
-
-const props = defineProps({ visible: Boolean });
-const emit = defineEmits(['update:visible', 'created']);
-
-const species = useSpeciesStore();
-const query = ref('');
-const selectedGbif = ref(null);
-const displayNameRu = ref('');
-const isLoading = ref(false);
-const alreadyExists = ref(false);
-
-function handleSearch() {
-  selectedGbif.value = null;
-  alreadyExists.value = false;
-  species.searchGbif(query.value);
-}
+<script setup>
+import { useSpeciesStore } from '@/stores/species.store'
+// ...
+const speciesStore = useSpeciesStore()
+const selectedGbif = ref(null)
+const displayNameRu = ref('')
 
 async function handleSave() {
-  isLoading.value = true;
-  try {
-    const result = await species.createSpecies({
-      gbifId: selectedGbif.value.gbifId,
-      scientificName: selectedGbif.value.scientificName,
-      displayNameRu: displayNameRu.value,
-      gbifFamily: selectedGbif.value.family,
-      gbifGenus: selectedGbif.value.genus,
-    });
-    if (result.alreadyExists) {
-      alreadyExists.value = true;
-    } else {
-      emit('created');
-      close();
-    }
-  } finally {
-    isLoading.value = false;
-  }
-}
+  if (!selectedGbif.value) return
 
-function close() {
-  query.value = '';
-  selectedGbif.value = null;
-  displayNameRu.value = '';
-  alreadyExists.value = false;
-  species.searchResults = [];
-  emit('update:visible', false);
+  const result = await speciesStore.createSpecies({
+    scientific_name: selectedGbif.value.scientificName,
+    display_name_ru: displayNameRu.value.trim()
+  })
+
+  if (!result?.ok) return
+  if (result?.data?.alreadyExists) {
+    alreadyExists.value = true
+    return
+  }
+  emit('created')
+  close()
 }
 </script>
 ```
+
+Подпись «Поиск по GBIF» сохранена в UI: фактически запрос идёт на `GET .../species/search`, который объединяет локальные совпадения и внешний GBIF.
 
 ---
 
@@ -430,8 +386,8 @@ function close() {
 
 | # | Проверка | Как проверить |
 |---|----------|---------------|
-| 1 | GBIF-поиск с debounce 400ms | Вводить символы — запрос уходит только после паузы |
-| 2 | `alreadyExists` показывает Info-сообщение | Добавить один вид дважды — появляется уведомление |
+| 1 | Поиск видов с debounce 400ms | Вводить символы — запрос на `.../species/search` после паузы |
+| 2 | `POST .../species/attach-by-name` с `scientific_name` + `display_name_ru` | Сохранить вид; при дубле в питомнике — `alreadyExists`, Info в UI |
 | 3 | Системные типы (движений, контейнеров) не имеют кнопок edit/delete | `is_system = true` — кнопок нет |
 | 4 | Создание тега без `feature_tags` → 403 от API, toast в UI | Войти на плане `free`, создать тег |
 | 5 | Все справочники синхронизируются в Dexie | Проверить IndexedDB после fetch |

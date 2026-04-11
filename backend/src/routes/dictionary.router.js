@@ -7,9 +7,9 @@ import { requireNurseryAccess } from '@/middlewares/requireNurseryAccess.js';
 import { requireRole } from '@/middlewares/requireRole.js';
 import { validate } from '@/middlewares/validate.js';
 import {
+  attachSpeciesByNameSchema,
   createContainerTypeSchema,
   createMovementTypeSchema,
-  createSpeciesSchema,
   createTagSchema,
   updateContainerTypeSchema,
   updateMovementTypeSchema,
@@ -25,8 +25,14 @@ router.get('/species/search', dictionaryController.searchSpecies);
 router.post(
   '/species',
   requireRole(...STRUCTURE_ROLES),
-  validate(createSpeciesSchema),
+  validate(attachSpeciesByNameSchema),
   dictionaryController.createSpecies
+);
+router.post(
+  '/species/attach-by-name',
+  requireRole(...STRUCTURE_ROLES),
+  validate(attachSpeciesByNameSchema),
+  dictionaryController.attachSpeciesByName
 );
 router.patch(
   '/species/:id',
