@@ -8,7 +8,7 @@
   >
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="operationType">Тип операции *</label>
-      <Dropdown
+      <Select
         id="operationType"
         v-model="form.type"
         :options="TYPE_OPTIONS"
@@ -20,7 +20,7 @@
 
     <div v-if="isTransplant" class="mb-3 flex flex-col gap-1.5">
       <label for="newContainerId">Новый контейнер *</label>
-      <Dropdown
+      <Select
         id="newContainerId"
         v-model="form.newContainerId"
         :options="containerTypesStore.activeTypes"
@@ -49,11 +49,6 @@
 <script setup>
 import { useContainerTypesStore } from '@/stores/containerTypes.store'
 import { useOperationsStore } from '@/stores/operations.store'
-import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
-import Dropdown from 'primevue/dropdown'
-import Message from 'primevue/message'
-import Textarea from 'primevue/textarea'
 import { computed, ref } from 'vue'
 
 defineOptions({ name: 'OperationCreateDialog' })

@@ -70,11 +70,6 @@
 import { useNurseryStore } from '@/stores/nursery.store'
 import { usePlantsStore } from '@/stores/plants.store'
 import { generateLabelsPdf } from '@/utils/generateLabels'
-import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
-import Message from 'primevue/message'
-import SelectButton from 'primevue/selectbutton'
 import { onMounted, ref } from 'vue'
 
 defineOptions({ name: 'LabelsPage' })

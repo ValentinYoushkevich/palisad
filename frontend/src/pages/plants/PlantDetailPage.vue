@@ -61,8 +61,6 @@ import { useMovementsStore } from '@/stores/movements.store'
 import { useMovementTypesStore } from '@/stores/movementTypes.store'
 import { useOperationsStore } from '@/stores/operations.store'
 import { usePlantsStore } from '@/stores/plants.store'
-import Button from 'primevue/button'
-import Message from 'primevue/message'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 

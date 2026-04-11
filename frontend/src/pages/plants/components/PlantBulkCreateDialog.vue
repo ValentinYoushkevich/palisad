@@ -12,7 +12,7 @@
     </div>
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="bulkSpecies">Вид</label>
-      <Dropdown
+      <Select
         id="bulkSpecies"
         v-model="template.speciesId"
         :options="speciesStore.activeSpecies"
@@ -23,7 +23,7 @@
     </div>
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="bulkLocation">Локация</label>
-      <Dropdown
+      <Select
         id="bulkLocation"
         v-model="template.locationId"
         :options="locationsStore.flatList"
@@ -46,11 +46,6 @@
 import { useLocationsStore } from '@/stores/locations.store'
 import { usePlantsStore } from '@/stores/plants.store'
 import { useSpeciesStore } from '@/stores/species.store'
-import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
-import Dropdown from 'primevue/dropdown'
-import InputNumber from 'primevue/inputnumber'
-import Message from 'primevue/message'
 import { ref } from 'vue'
 
 defineOptions({ name: 'PlantBulkCreateDialog' })

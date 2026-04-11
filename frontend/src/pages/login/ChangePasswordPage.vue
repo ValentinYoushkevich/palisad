@@ -41,9 +41,6 @@
 
 <script setup>
 import { useAuthStore } from '@/stores/auth.store'
-import Button from 'primevue/button'
-import Message from 'primevue/message'
-import Password from 'primevue/password'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 

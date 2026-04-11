@@ -8,7 +8,7 @@
   >
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="movementType">Тип движения *</label>
-      <Dropdown
+      <Select
         id="movementType"
         v-model="form.typeId"
         :options="movementTypesStore.activeTypes"
@@ -27,12 +27,12 @@
             />
           </div>
         </template>
-      </Dropdown>
+      </Select>
     </div>
 
     <div v-if="isTransfer" class="mb-3 flex flex-col gap-1.5">
       <label for="fromLocation">Откуда</label>
-      <Dropdown
+      <Select
         id="fromLocation"
         v-model="form.fromLocationId"
         :options="locationsStore.flatList"
@@ -45,7 +45,7 @@
 
     <div v-if="isTransfer" class="mb-3 flex flex-col gap-1.5">
       <label for="toLocation">Куда *</label>
-      <Dropdown
+      <Select
         id="toLocation"
         v-model="form.toLocationId"
         :options="locationsStore.flatList"
@@ -83,13 +83,6 @@
 import { useLocationsStore } from '@/stores/locations.store'
 import { useMovementsStore } from '@/stores/movements.store'
 import { useMovementTypesStore } from '@/stores/movementTypes.store'
-import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
-import Dropdown from 'primevue/dropdown'
-import InputNumber from 'primevue/inputnumber'
-import Message from 'primevue/message'
-import Tag from 'primevue/tag'
-import Textarea from 'primevue/textarea'
 import { computed, ref } from 'vue'
 
 defineOptions({ name: 'MovementCreateDialog' })

@@ -51,10 +51,6 @@ import LocationCreateDialog from '@/pages/locations/components/LocationCreateDia
 import LocationEditDialog from '@/pages/locations/components/LocationEditDialog.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useLocationsStore } from '@/stores/locations.store'
-import Button from 'primevue/button'
-import Message from 'primevue/message'
-import Tag from 'primevue/tag'
-import Tree from 'primevue/tree'
 import { useConfirm } from 'primevue/useconfirm'
 import { onMounted, ref } from 'vue'
 

@@ -43,9 +43,6 @@
 </template>
 
 <script setup>
-import Button from 'primevue/button'
-import ProgressSpinner from 'primevue/progressspinner'
-import Timeline from 'primevue/timeline'
 
 defineOptions({ name: 'OperationTimeline' })
 

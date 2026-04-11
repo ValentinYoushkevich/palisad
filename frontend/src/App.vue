@@ -9,8 +9,6 @@
 
 <script setup>
 import AppLayout from '@/layouts/AppLayout.vue'
-import ConfirmDialog from 'primevue/confirmdialog'
-import Toast from 'primevue/toast'
 import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 

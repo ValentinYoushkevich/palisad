@@ -66,11 +66,6 @@
 
 <script setup>
 import { useSpeciesStore } from '@/stores/species.store'
-import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
-import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
-import ProgressSpinner from 'primevue/progressspinner'
 import { computed, ref } from 'vue'
 
 defineOptions({ name: 'SpeciesSearchDialog' })

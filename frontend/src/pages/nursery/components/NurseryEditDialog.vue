@@ -23,10 +23,6 @@
 
 <script setup>
 import { useNurseryStore } from '@/stores/nursery.store'
-import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
-import InputText from 'primevue/inputtext'
-import Textarea from 'primevue/textarea'
 import { ref, watch } from 'vue'
 
 defineOptions({ name: 'NurseryEditDialog' })

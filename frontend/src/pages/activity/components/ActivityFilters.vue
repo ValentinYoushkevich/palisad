@@ -1,35 +1,37 @@
 <template>
   <div class="flex flex-wrap gap-2">
-    <Calendar
+    <DatePicker
       v-model="dateFrom"
       dateFormat="dd.mm.yy"
       placeholder="От"
       showIcon
       @date-select="onFilterChange"
     />
-    <Calendar
+    <DatePicker
       v-model="dateTo"
       dateFormat="dd.mm.yy"
       placeholder="До"
       showIcon
       @date-select="onFilterChange"
     />
-    <Dropdown
-      v-model="eventType"
-      :options="EVENT_TYPE_OPTIONS"
-      optionLabel="label"
-      optionValue="value"
-      placeholder="Тип события"
-      showClear
-      @change="onFilterChange"
-    />
+    <div class="min-w-0">
+      <label class="sr-only" for="activity-event-type">Тип события</label>
+      <Select
+        v-model="eventType"
+        inputId="activity-event-type"
+        :options="EVENT_TYPE_OPTIONS"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Тип события"
+        showClear
+        @change="onFilterChange"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
 import { useActivityStore } from '@/stores/activity.store'
-import Calendar from 'primevue/calendar'
-import Dropdown from 'primevue/dropdown'
 import { computed } from 'vue'
 
 defineOptions({ name: 'ActivityFilters' })

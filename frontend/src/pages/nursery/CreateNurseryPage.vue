@@ -26,10 +26,6 @@
 
 <script setup>
 import { useNurseryStore } from '@/stores/nursery.store'
-import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
-import Textarea from 'primevue/textarea'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 

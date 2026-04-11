@@ -36,9 +36,6 @@
 <script setup>
 import QrScanner from '@/components/QrScanner.vue'
 import { usePlantsStore } from '@/stores/plants.store'
-import Button from 'primevue/button'
-import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 

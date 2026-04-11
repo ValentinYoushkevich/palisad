@@ -296,4 +296,15 @@ export default defineConfig([
   },
 
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
+
+  {
+    name: 'app/primevue-select-a11y',
+    files: [
+      '**/pages/activity/components/ActivityFilters.vue',
+      '**/pages/plants/components/PlantFiltersPanel.vue',
+    ],
+    rules: {
+      'vuejs-accessibility/form-control-has-label': 'off',
+    },
+  },
 ])

@@ -4,12 +4,11 @@ import db from '@/db/indexedDb'
 import { registerServiceWorker } from '@/registerServiceWorker'
 import router from '@/router'
 import http from '@/services/http'
+import Lara from '@primeuix/themes/lara'
 import { createPinia } from 'pinia'
 import 'primeicons/primeicons.css'
 import PrimeVue from 'primevue/config'
 import ConfirmationService from 'primevue/confirmationservice'
-import 'primevue/resources/primevue.min.css'
-import 'primevue/resources/themes/lara-light-blue/theme.css'
 import ToastService from 'primevue/toastservice'
 import Tooltip from 'primevue/tooltip'
 import { createApp } from 'vue'
@@ -24,7 +23,15 @@ const SW_DEBUG = false
 
 app.use(pinia)
 app.use(router)
-app.use(PrimeVue)
+app.use(PrimeVue, {
+  theme: {
+    preset: Lara,
+    options: {
+      prefix: 'p',
+      darkModeSelector: false
+    }
+  }
+})
 app.use(ToastService)
 app.use(ConfirmationService)
 app.directive('tooltip', Tooltip)

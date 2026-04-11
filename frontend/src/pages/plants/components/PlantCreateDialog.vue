@@ -8,7 +8,7 @@
   >
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="plantSpecies">Вид *</label>
-      <Dropdown
+      <Select
         id="plantSpecies"
         v-model="form.speciesId"
         :options="speciesStore.activeSpecies"
@@ -24,7 +24,7 @@
     </div>
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="plantDate">Дата посадки</label>
-      <Calendar id="plantDate" v-model="form.plantedAt" class="w-full" dateFormat="yy-mm-dd" />
+      <DatePicker id="plantDate" v-model="form.plantedAt" class="w-full" dateFormat="yy-mm-dd" />
     </div>
     <div class="mb-3 flex flex-col gap-1.5">
       <span>Источник</span>
@@ -32,7 +32,7 @@
     </div>
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="plantContainer">Контейнер</label>
-      <Dropdown
+      <Select
         id="plantContainer"
         v-model="form.containerId"
         :options="containerTypesStore.activeTypes"
@@ -43,7 +43,7 @@
     </div>
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="plantLocation">Местонахождение</label>
-      <Dropdown
+      <Select
         id="plantLocation"
         v-model="form.locationId"
         :options="locationsStore.flatList"
@@ -72,14 +72,6 @@ import { useContainerTypesStore } from '@/stores/containerTypes.store'
 import { useLocationsStore } from '@/stores/locations.store'
 import { usePlantsStore } from '@/stores/plants.store'
 import { useSpeciesStore } from '@/stores/species.store'
-import Button from 'primevue/button'
-import Calendar from 'primevue/calendar'
-import Dialog from 'primevue/dialog'
-import Dropdown from 'primevue/dropdown'
-import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
-import SelectButton from 'primevue/selectbutton'
-import Textarea from 'primevue/textarea'
 import { ref } from 'vue'
 
 defineOptions({ name: 'PlantCreateDialog' })

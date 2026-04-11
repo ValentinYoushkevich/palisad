@@ -51,9 +51,6 @@
 import ActivityLogItem from '@/components/ActivityLogItem.vue'
 import ActivityFilters from '@/pages/activity/components/ActivityFilters.vue'
 import { useActivityStore } from '@/stores/activity.store'
-import Button from 'primevue/button'
-import Message from 'primevue/message'
-import ProgressSpinner from 'primevue/progressspinner'
 import { onMounted } from 'vue'
 
 defineOptions({ name: 'ActivityPage' })

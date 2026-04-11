@@ -64,11 +64,6 @@ import StaffCreateDialog from '@/pages/staff/components/StaffCreateDialog.vue'
 import StaffEditDialog from '@/pages/staff/components/StaffEditDialog.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useStaffStore } from '@/stores/staff.store'
-import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
-import Message from 'primevue/message'
-import Tag from 'primevue/tag'
 import { onMounted, ref } from 'vue'
 
 defineOptions({ name: 'StaffPage' })

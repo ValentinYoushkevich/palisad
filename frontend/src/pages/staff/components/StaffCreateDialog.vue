@@ -12,7 +12,7 @@
     </div>
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="createRole">Роль *</label>
-      <Dropdown
+      <Select
         id="createRole"
         v-model="form.role"
         :options="ROLE_OPTIONS"
@@ -41,12 +41,6 @@
 
 <script setup>
 import { useStaffStore } from '@/stores/staff.store'
-import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
-import Dropdown from 'primevue/dropdown'
-import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
-import Password from 'primevue/password'
 import { ref } from 'vue'
 
 defineOptions({ name: 'StaffCreateDialog' })

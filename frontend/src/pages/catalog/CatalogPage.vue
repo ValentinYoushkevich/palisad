@@ -212,7 +212,7 @@
         </div>
         <div class="space-y-1">
           <label for="movementStatus">Меняет статус</label>
-          <Dropdown id="movementStatus" v-model="movementStatusValue" :options="movementStatusOptions" optionLabel="label" optionValue="value" class="w-full" />
+          <Select id="movementStatus" v-model="movementStatusValue" :options="movementStatusOptions" optionLabel="label" optionValue="value" class="w-full" />
         </div>
         <div class="flex items-center gap-2 text-sm text-slate-700">
           <Checkbox v-model="movementForm.is_active" inputId="movementActive" binary />
@@ -238,7 +238,7 @@
         </div>
         <div class="space-y-1">
           <label for="containerKind">Вид контейнера</label>
-          <Dropdown id="containerKind" v-model="containerForm.container_kind" :options="CONTAINER_KIND_OPTIONS" optionLabel="label" optionValue="value" class="w-full" />
+          <Select id="containerKind" v-model="containerForm.container_kind" :options="CONTAINER_KIND_OPTIONS" optionLabel="label" optionValue="value" class="w-full" />
         </div>
         <div class="space-y-1">
           <label for="containerVolume">Объём (л)</label>
@@ -286,18 +286,6 @@ import { useContainerTypesStore } from '@/stores/containerTypes.store'
 import { useMovementTypesStore } from '@/stores/movementTypes.store'
 import { useSpeciesStore } from '@/stores/species.store'
 import { useTagsStore } from '@/stores/tags.store'
-import Button from 'primevue/button'
-import Card from 'primevue/card'
-import Checkbox from 'primevue/checkbox'
-import ColorPicker from 'primevue/colorpicker'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
-import Dialog from 'primevue/dialog'
-import Dropdown from 'primevue/dropdown'
-import InputNumber from 'primevue/inputnumber'
-import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
-import Tag from 'primevue/tag'
 import { computed, onMounted, ref } from 'vue'
 
 defineOptions({ name: 'CatalogPage' })

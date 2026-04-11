@@ -12,7 +12,7 @@
     </div>
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="editLocationType">Тип</label>
-      <Dropdown
+      <Select
         id="editLocationType"
         v-model="form.type"
         :options="TYPE_OPTIONS"
@@ -35,11 +35,6 @@
 
 <script setup>
 import { useLocationsStore } from '@/stores/locations.store'
-import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
-import Dropdown from 'primevue/dropdown'
-import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
 import { ref, watch } from 'vue'
 
 defineOptions({ name: 'LocationEditDialog' })

@@ -12,7 +12,7 @@
     </div>
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="createLocationType">Тип *</label>
-      <Dropdown
+      <Select
         id="createLocationType"
         v-model="form.type"
         :options="typeOptions"
@@ -36,11 +36,6 @@
 
 <script setup>
 import { useLocationsStore } from '@/stores/locations.store'
-import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
-import Dropdown from 'primevue/dropdown'
-import InputText from 'primevue/inputtext'
-import Message from 'primevue/message'
 import { computed, ref, watch } from 'vue'
 
 defineOptions({ name: 'LocationCreateDialog' })

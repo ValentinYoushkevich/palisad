@@ -59,11 +59,6 @@
 </template>
 
 <script setup>
-import Button from 'primevue/button'
-import Column from 'primevue/column'
-import DataTable from 'primevue/datatable'
-import ProgressSpinner from 'primevue/progressspinner'
-import Tag from 'primevue/tag'
 
 defineOptions({ name: 'MovementHistory' })
 

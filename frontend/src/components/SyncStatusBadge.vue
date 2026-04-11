@@ -48,7 +48,6 @@
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { failedCount, pendingCount, syncStatus, useSyncManager } from '@/composables/useSyncManager'
 import { retryFailed } from '@/db/syncQueue.service'
-import Button from 'primevue/button'
 
 defineOptions({ name: 'SyncStatusBadge' })
 
