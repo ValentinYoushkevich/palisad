@@ -20,9 +20,9 @@
         @click="activeSection = section.key"
       >
         <template #header>
-          <div class="catalog-card__header" :style="{ background: section.headerGradient }">
-            <div class="catalog-card__glow" />
-            <div class="catalog-card__orb">
+          <div class="relative flex h-[132px] items-center overflow-hidden p-4" :style="{ background: section.headerGradient }">
+            <div class="absolute -right-7 -top-7 h-[140px] w-[140px] rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.35)_0%,rgba(255,255,255,0)_70%)]" />
+            <div class="relative z-1 inline-flex h-[52px] w-[52px] items-center justify-center rounded-full border border-[rgba(255,255,255,0.35)] bg-[rgba(255,255,255,0.18)] backdrop-blur-[2px]">
               <i :class="section.iconClass" />
             </div>
           </div>
@@ -82,6 +82,7 @@
         :loading="isSectionLoading"
         :rows="20"
         :rowsPerPageOptions="[20, 50, 100]"
+        class="catalog-table"
         paginator
         stripedRows
         size="small"
@@ -211,7 +212,6 @@
 </template>
 
 <script setup>
-import '@/pages/catalog/catalog-cards.scss'
 import {
   CONTAINER_KIND_OPTIONS,
   SECTION_CARD_META,
@@ -450,3 +450,24 @@ async function handleSpeciesCreated() {
   await speciesStore.fetchSpecies()
 }
 </script>
+
+<style scoped lang="scss">
+.catalog-card :deep(.p-card-body) {
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.catalog-card :deep(.p-card-content) {
+  padding: 0.25rem 0;
+}
+
+.catalog-card :deep(.p-card-footer) {
+  margin-top: 0.2rem;
+}
+
+.catalog-table :deep(.p-paginator-bottom) {
+  border-bottom: none;
+}
+</style>

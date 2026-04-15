@@ -105,3 +105,9 @@ function handleSubmit() {
   })
 }
 </script>
+
+<style scoped lang="scss">
+.catalog-dictionary-dialog :deep(.p-inputtext) {
+  min-height: 3rem;
+}
+</style>
