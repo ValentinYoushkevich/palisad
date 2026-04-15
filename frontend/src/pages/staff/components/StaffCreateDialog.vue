@@ -25,9 +25,9 @@
       <label for="createEmail">Email</label>
       <InputText id="createEmail" v-model="form.email" class="w-full" type="email" />
     </div>
-    <div class="mb-3 flex flex-col gap-1.5">
+    <div class="staffCreateDialog__field mb-3 flex flex-col gap-1.5">
       <label for="createPassword">Временный пароль *</label>
-      <Password id="createPassword" v-model="form.password" :feedback="false" toggleMask />
+      <Password id="createPassword" v-model="form.password" :feedback="false" toggleMask fluid />
     </div>
 
     <Message v-if="staffStore.staffError" severity="error">{{ staffStore.staffError }}</Message>
@@ -93,3 +93,10 @@ async function handleCreate() {
   emit('created')
 }
 </script>
+
+<style lang="scss" scoped>
+.staffCreateDialog__field :deep(.p-password),
+.staffCreateDialog__field :deep(.p-password-input) {
+  width: 100%;
+}
+</style>
