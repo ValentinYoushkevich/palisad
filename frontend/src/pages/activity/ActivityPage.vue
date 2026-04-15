@@ -50,8 +50,8 @@
 </template>
 
 <script setup>
-import ActivityLogItem from '@/components/ActivityLogItem.vue'
 import ActivityFilters from '@/pages/activity/components/ActivityFilters.vue'
+import ActivityLogItem from '@/pages/activity/components/ActivityLogItem.vue'
 import { useActivityStore } from '@/stores/activity.store'
 import { onMounted } from 'vue'
 

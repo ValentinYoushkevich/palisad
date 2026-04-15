@@ -43,7 +43,6 @@
 </template>
 
 <script setup>
-
 defineOptions({ name: 'OperationTimeline' })
 
 defineProps({

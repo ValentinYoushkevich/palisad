@@ -178,91 +178,35 @@
       </DataTable>
     </div>
     <SpeciesSearchDialog v-model:visible="speciesDialogVisible" @created="handleSpeciesCreated" />
-
-    <Dialog v-model:visible="tagDialogVisible" :header="tagDialogTitle" class="catalog-dictionary-dialog" modal style="width: 460px">
-      <div class="space-y-3">
-        <Message v-if="tagsStore.tagsError" severity="error">{{ tagsStore.tagsError }}</Message>
-        <div class="space-y-1">
-          <label for="tagName">Название</label>
-          <InputText id="tagName" v-model="tagForm.name" class="w-full" />
-        </div>
-        <div class="space-y-1">
-          <label for="tagColor">Цвет (HEX)</label>
-          <div class="flex items-center gap-3">
-            <ColorPicker id="tagColor" v-model="tagColorValue" format="hex" />
-            <InputText :modelValue="normalizeHexColor(tagForm.color)" class="w-full" readonly />
-          </div>
-        </div>
-        <div class="flex items-center gap-2 text-sm text-slate-700">
-          <Checkbox v-model="tagForm.is_active" inputId="tagActive" binary />
-          <label for="tagActive">Активен</label>
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Отмена" text @click="closeTagDialog" />
-        <Button :label="tagSaveLabel" :loading="tagsStore.isLoading" @click="handleSaveTag" />
-      </template>
-    </Dialog>
-
-    <Dialog v-model:visible="movementDialogVisible" :header="movementDialogTitle" class="catalog-dictionary-dialog" modal style="width: 520px">
-      <div class="space-y-3">
-        <Message v-if="movementDialogError" severity="error">{{ movementDialogError }}</Message>
-        <div class="space-y-1">
-          <label for="movementName">Название</label>
-          <InputText id="movementName" v-model="movementForm.name" class="w-full" />
-        </div>
-        <div class="space-y-1">
-          <label for="movementSlug">Slug</label>
-          <InputText id="movementSlug" v-model="movementForm.slug" class="w-full" />
-        </div>
-        <div class="space-y-1">
-          <label for="movementStatus">Меняет статус</label>
-          <Select id="movementStatus" v-model="movementStatusValue" :options="movementStatusOptions" optionLabel="label" optionValue="value" class="w-full" />
-        </div>
-        <div class="flex items-center gap-2 text-sm text-slate-700">
-          <Checkbox v-model="movementForm.is_active" inputId="movementActive" binary />
-          <label for="movementActive">Активен</label>
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Отмена" text @click="closeMovementDialog" />
-        <Button :label="movementSaveLabel" :loading="movementTypesStore.isLoading" @click="handleSaveMovementType" />
-      </template>
-    </Dialog>
-
-    <Dialog v-model:visible="containerDialogVisible" :header="containerDialogTitle" class="catalog-dictionary-dialog" modal style="width: 560px">
-      <div class="grid gap-3 md:grid-cols-2">
-        <div class="md:col-span-2"><Message v-if="containerTypesStore.containerTypesError" severity="error">{{ containerTypesStore.containerTypesError }}</Message></div>
-        <div class="space-y-1">
-          <label for="containerName">Название</label>
-          <InputText id="containerName" v-model="containerForm.name" class="w-full" />
-        </div>
-        <div class="space-y-1">
-          <label for="containerCode">Код</label>
-          <InputText id="containerCode" v-model="containerForm.code" class="w-full" />
-        </div>
-        <div class="space-y-1">
-          <label for="containerKind">Вид контейнера</label>
-          <Select id="containerKind" v-model="containerForm.container_kind" :options="CONTAINER_KIND_OPTIONS" optionLabel="label" optionValue="value" class="w-full" />
-        </div>
-        <div class="space-y-1">
-          <label for="containerVolume">Объём (л)</label>
-          <InputNumber id="containerVolume" v-model="containerForm.volume_liters" class="w-full" :min="0" :useGrouping="false" />
-        </div>
-        <div class="space-y-1">
-          <label for="containerSide">Сторона (см)</label>
-          <InputNumber id="containerSide" v-model="containerForm.side_cm" class="w-full" :min="0" :useGrouping="false" />
-        </div>
-        <div class="mt-7 flex items-center gap-2 text-sm text-slate-700">
-          <Checkbox v-model="containerForm.is_active" inputId="containerActive" binary />
-          <label for="containerActive">Активен</label>
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Отмена" text @click="closeContainerDialog" />
-        <Button :label="containerSaveLabel" :loading="containerTypesStore.isLoading" @click="handleSaveContainerType" />
-      </template>
-    </Dialog>
+    <TagFormDialog
+      v-model="tagDialogVisible"
+      :errorMessage="tagsStore.tagsError"
+      :initialForm="tagInitialForm"
+      :loading="tagsStore.isLoading"
+      :saveLabel="tagSaveLabel"
+      :title="tagDialogTitle"
+      @submit="handleSaveTag"
+    />
+    <MovementTypeDialog
+      v-model="movementDialogVisible"
+      :errorMessage="movementDialogError"
+      :initialForm="movementInitialForm"
+      :loading="movementTypesStore.isLoading"
+      :saveLabel="movementSaveLabel"
+      :statusOptions="movementStatusOptions"
+      :title="movementDialogTitle"
+      @submit="handleSaveMovementType"
+    />
+    <ContainerTypeDialog
+      v-model="containerDialogVisible"
+      :errorMessage="containerTypesStore.containerTypesError"
+      :initialForm="containerInitialForm"
+      :kindOptions="CONTAINER_KIND_OPTIONS"
+      :loading="containerTypesStore.isLoading"
+      :saveLabel="containerSaveLabel"
+      :title="containerDialogTitle"
+      @submit="handleSaveContainerType"
+    />
   </section>
 </template>
 
@@ -280,12 +224,14 @@ import {
   defaultTagForm,
   emptyTextBySection,
   kindLabelByValue,
-  normalizeHexColor,
   statusLabelByValue,
   systemLabel,
   systemSeverity
 } from '@/pages/catalog/catalog.config'
+import ContainerTypeDialog from '@/pages/catalog/components/ContainerTypeDialog.vue'
+import MovementTypeDialog from '@/pages/catalog/components/MovementTypeDialog.vue'
 import SpeciesSearchDialog from '@/pages/catalog/components/SpeciesSearchDialog.vue'
+import TagFormDialog from '@/pages/catalog/components/TagFormDialog.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useContainerTypesStore } from '@/stores/containerTypes.store'
 import { useMovementTypesStore } from '@/stores/movementTypes.store'
@@ -306,16 +252,16 @@ const speciesDialogVisible = ref(false)
 
 const tagDialogVisible = ref(false)
 const tagEditingId = ref(null)
-const tagForm = ref(defaultTagForm())
+const tagInitialForm = ref(defaultTagForm())
 
 const movementDialogVisible = ref(false)
 const movementEditingId = ref(null)
-const movementForm = ref(defaultMovementForm())
+const movementInitialForm = ref(defaultMovementForm())
 const movementDialogError = ref('')
 
 const containerDialogVisible = ref(false)
 const containerEditingId = ref(null)
-const containerForm = ref(defaultContainerForm())
+const containerInitialForm = ref(defaultContainerForm())
 
 const sectionTitle = computed(() => SECTION_TITLES[activeSection.value] || 'Справочник')
 const emptyStateText = computed(() => emptyTextBySection(activeSection.value))
@@ -367,19 +313,7 @@ const containerDialogTitle = computed(() => (containerEditingId.value ? 'Ред�
 const tagSaveLabel = computed(() => (tagEditingId.value ? 'Сохранить' : 'Добавить'))
 const movementSaveLabel = computed(() => (movementEditingId.value ? 'Сохранить' : 'Добавить'))
 const containerSaveLabel = computed(() => (containerEditingId.value ? 'Сохранить' : 'Добавить'))
-const movementStatusValue = computed({
-  get: () => movementForm.value.sets_status ?? '__none__',
-  set: (value) => {
-    movementForm.value.sets_status = value === '__none__' ? null : value
-  }
-})
 const movementStatusOptions = [{ label: 'Не меняет', value: '__none__' }, ...STATUS_OPTIONS]
-const tagColorValue = computed({
-  get: () => normalizeHexColor(tagForm.value.color).replace('#', ''),
-  set: (value) => {
-    tagForm.value.color = normalizeHexColor(`#${String(value || '').replace('#', '')}`)
-  }
-})
 onMounted(async () => {
   await Promise.all([
     speciesStore.fetchSpecies(),
@@ -391,13 +325,13 @@ onMounted(async () => {
 
 function openCreateTag() {
   tagEditingId.value = null
-  tagForm.value = defaultTagForm()
+  tagInitialForm.value = defaultTagForm()
   tagsStore.tagsError = ''
   tagDialogVisible.value = true
 }
 function openEditTag(item) {
   tagEditingId.value = item.id
-  tagForm.value = {
+  tagInitialForm.value = {
     name: item.name || '',
     color: item.color || '#3B82F6',
     is_active: Boolean(item.is_active)
@@ -406,14 +340,14 @@ function openEditTag(item) {
   tagDialogVisible.value = true
 }
 
-async function handleSaveTag() {
-  if (!tagForm.value.name?.trim()) {
+async function handleSaveTag(formData) {
+  if (!formData?.name?.trim()) {
     return
   }
   const payload = {
-    name: tagForm.value.name.trim(),
-    color: normalizeHexColor(tagForm.value.color),
-    is_active: Boolean(tagForm.value.is_active)
+    name: formData.name.trim(),
+    color: formData.color,
+    is_active: Boolean(formData.is_active)
   }
   const result = tagEditingId.value
     ? await tagsStore.updateTag(tagEditingId.value, payload)
@@ -426,14 +360,14 @@ async function handleSaveTag() {
 
 function openCreateMovementType() {
   movementEditingId.value = null
-  movementForm.value = defaultMovementForm()
+  movementInitialForm.value = defaultMovementForm()
   movementDialogError.value = ''
   movementTypesStore.movementTypesError = ''
   movementDialogVisible.value = true
 }
 function openEditMovementType(item) {
   movementEditingId.value = item.id
-  movementForm.value = {
+  movementInitialForm.value = {
     name: item.name || '',
     slug: item.slug || '',
     sets_status: item.sets_status ?? null,
@@ -444,16 +378,16 @@ function openEditMovementType(item) {
   movementDialogVisible.value = true
 }
 
-async function handleSaveMovementType() {
+async function handleSaveMovementType(formData) {
   movementDialogError.value = ''
-  if (!movementForm.value.name?.trim() || !movementForm.value.slug?.trim()) {
+  if (!formData?.name?.trim() || !formData?.slug?.trim()) {
     return
   }
   const payload = {
-    name: movementForm.value.name.trim(),
-    slug: movementForm.value.slug.trim(),
-    sets_status: movementForm.value.sets_status || null,
-    is_active: Boolean(movementForm.value.is_active)
+    name: formData.name.trim(),
+    slug: formData.slug.trim(),
+    sets_status: formData.sets_status || null,
+    is_active: Boolean(formData.is_active)
   }
   const result = movementEditingId.value
     ? await movementTypesStore.updateMovementType(movementEditingId.value, payload)
@@ -467,17 +401,9 @@ async function handleSaveMovementType() {
   await movementTypesStore.fetchMovementTypes()
 }
 
-function closeMovementDialog() {
-  movementDialogVisible.value = false
-  movementDialogError.value = ''
-  movementTypesStore.movementTypesError = ''
-}
-function closeTagDialog() { tagDialogVisible.value = false; tagsStore.tagsError = '' }
-function closeContainerDialog() { containerDialogVisible.value = false; containerTypesStore.containerTypesError = '' }
-
 function openCreateContainerType() {
   containerEditingId.value = null
-  containerForm.value = defaultContainerForm()
+  containerInitialForm.value = defaultContainerForm()
   containerTypesStore.containerTypesError = ''
   containerDialogVisible.value = true
 }
@@ -487,7 +413,7 @@ function openEditContainerType(item) {
     return
   }
   containerEditingId.value = item.id
-  containerForm.value = {
+  containerInitialForm.value = {
     code: item.code || '',
     name: item.name || '',
     container_kind: item.container_kind || 'pot',
@@ -499,17 +425,17 @@ function openEditContainerType(item) {
   containerDialogVisible.value = true
 }
 
-async function handleSaveContainerType() {
-  if (!containerForm.value.code?.trim() || !containerForm.value.name?.trim() || !containerForm.value.container_kind) {
+async function handleSaveContainerType(formData) {
+  if (!formData?.code?.trim() || !formData?.name?.trim() || !formData?.container_kind) {
     return
   }
   const payload = {
-    code: containerForm.value.code.trim(),
-    name: containerForm.value.name.trim(),
-    container_kind: containerForm.value.container_kind,
-    volume_liters: containerForm.value.volume_liters,
-    side_cm: containerForm.value.side_cm,
-    is_active: Boolean(containerForm.value.is_active)
+    code: formData.code.trim(),
+    name: formData.name.trim(),
+    container_kind: formData.container_kind,
+    volume_liters: formData.volume_liters,
+    side_cm: formData.side_cm,
+    is_active: Boolean(formData.is_active)
   }
   const result = containerEditingId.value
     ? await containerTypesStore.updateContainerType(containerEditingId.value, payload)

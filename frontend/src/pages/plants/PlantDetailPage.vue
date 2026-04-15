@@ -56,11 +56,11 @@
 </template>
 
 <script setup>
-import MovementHistory from '@/components/MovementHistory.vue'
-import OperationTimeline from '@/components/OperationTimeline.vue'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import MovementCreateDialog from '@/pages/plants/components/MovementCreateDialog.vue'
+import MovementHistory from '@/pages/plants/components/MovementHistory.vue'
 import OperationCreateDialog from '@/pages/plants/components/OperationCreateDialog.vue'
+import OperationTimeline from '@/pages/plants/components/OperationTimeline.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useContainerTypesStore } from '@/stores/containerTypes.store'
 import { useLocationsStore } from '@/stores/locations.store'

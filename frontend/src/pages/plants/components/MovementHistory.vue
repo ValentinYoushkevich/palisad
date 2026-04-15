@@ -60,7 +60,6 @@
 </template>
 
 <script setup>
-
 defineOptions({ name: 'MovementHistory' })
 
 defineProps({

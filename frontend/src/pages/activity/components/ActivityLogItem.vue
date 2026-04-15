@@ -16,19 +16,19 @@
         <span class="text-xs text-gray-500">{{ formatDate(log.created_at) }}</span>
       </div>
 
-      <div v-if="log.event_type === 'movement.created' && log.details" class="mt-1 text-sm text-gray-500">
+      <div v-if="isMovementCreated" class="mt-1 text-sm text-gray-500">
         {{ log.details.type_name }}<span v-if="log.details.plant_qr"> · {{ log.details.plant_qr }}</span>
       </div>
 
-      <div v-if="log.event_type === 'operation.created' && log.details?.type === 'transplant'" class="mt-1 text-sm text-gray-500">
+      <div v-if="isTransplantOperation" class="mt-1 text-sm text-gray-500">
         Пересадка: {{ log.details.from_container || '—' }} → {{ log.details.to_container || '—' }}
       </div>
 
-      <div v-if="log.event_type === 'plant.status_changed' && log.details" class="mt-1 text-sm text-gray-500">
+      <div v-if="isStatusChanged" class="mt-1 text-sm text-gray-500">
         {{ statusLabel(log.details.from) }} → {{ statusLabel(log.details.to) }}
       </div>
 
-      <div v-if="log.entity_type === 'plant' && log.entity_id">
+      <div v-if="canOpenPlant">
         <Button
           class="mt-1 p-0"
           label="Открыть растение"
@@ -42,11 +42,12 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 defineOptions({ name: 'ActivityLogItem' })
 
-defineProps({
+const props = defineProps({
   log: {
     type: Object,
     required: true
@@ -54,6 +55,16 @@ defineProps({
 })
 
 const router = useRouter()
+
+const isMovementCreated = computed(() => props.log.event_type === 'movement.created' && Boolean(props.log.details))
+const isTransplantOperation = computed(() => {
+  if (props.log.event_type !== 'operation.created' || !props.log.details) {
+    return false
+  }
+  return props.log.details.type === 'transplant'
+})
+const isStatusChanged = computed(() => props.log.event_type === 'plant.status_changed' && Boolean(props.log.details))
+const canOpenPlant = computed(() => props.log.entity_type === 'plant' && Boolean(props.log.entity_id))
 
 const EVENT_LABELS = {
   'plant.created': 'Растение создано',

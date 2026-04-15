@@ -49,8 +49,8 @@
 </template>
 
 <script setup>
-import SyncStatusBadge from '@/components/SyncStatusBadge.vue'
 import { useSyncManager } from '@/composables/useSyncManager'
+import SyncStatusBadge from '@/layouts/components/SyncStatusBadge.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { isMobileDevice } from '@/utils/device'

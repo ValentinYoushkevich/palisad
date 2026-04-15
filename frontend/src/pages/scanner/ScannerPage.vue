@@ -39,7 +39,7 @@
 </template>
 
 <script setup>
-import QrScanner from '@/components/QrScanner.vue'
+import QrScanner from '@/pages/scanner/components/QrScanner.vue'
 import { usePlantsStore } from '@/stores/plants.store'
 import { isMobileDevice } from '@/utils/device'
 import { ref } from 'vue'
