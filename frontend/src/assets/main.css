@@ -5,6 +5,9 @@
   line-height: 1.5;
   color: #111827;
   background-color: #f9fafb;
+  --panel-radius: 12px;
+  --panel-padding: 16px;
+  --control-height: 42px;
 }
 
 * {
@@ -13,4 +16,32 @@
 
 body {
   margin: 0;
+}
+
+.page-shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.page-panel {
+  border: 1px solid #e5e7eb;
+  border-radius: var(--panel-radius);
+  background: #ffffff;
+  padding: var(--panel-padding);
+}
+
+.ui-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ui-filter-grid > * {
+  min-width: 0;
+}
+
+.ui-action-icon {
+  width: 30px;
+  height: 30px;
 }

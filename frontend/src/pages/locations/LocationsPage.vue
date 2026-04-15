@@ -1,5 +1,5 @@
 <template>
-  <section class="flex flex-col gap-3">
+  <section class="page-shell flex flex-col gap-3">
     <div class="flex items-center justify-between">
       <h2>Структура питомника</h2>
       <Button
@@ -14,7 +14,11 @@
       {{ locationsStore.locationsError }}
     </Message>
 
-    <Tree :value="locationsStore.tree" :loading="locationsStore.isLoading" class="rounded-lg bg-white p-2 locationsPage__tree">
+    <Tree
+      :value="locationsStore.tree"
+      :loading="locationsStore.isLoading"
+      class="locationsPage__tree page-panel"
+    >
       <template #default="{ node }">
         <div class="box-border flex w-full min-w-0 max-w-full items-center justify-between gap-3">
           <div class="flex min-w-0 flex-1 items-center gap-2">
@@ -28,9 +32,9 @@
               @click.stop="openCreateChild(node)"
             />
           </div>
-          <div v-if="authStore.canManageStructure" class="flex shrink-0 items-center gap-1">
-            <Button icon="pi pi-pencil" size="small" text @click.stop="openEdit(node)" />
-            <Button icon="pi pi-trash" severity="danger" size="small" text @click.stop="handleDelete(node, $event)" />
+          <div v-if="authStore.canManageStructure" class="flex shrink-0 items-center gap-2">
+            <Button class="ui-action-icon" icon="pi pi-pencil" severity="secondary" size="small" outlined @click.stop="openEdit(node)" />
+            <Button class="ui-action-icon" icon="pi pi-trash" severity="danger" size="small" outlined @click.stop="handleDelete(node, $event)" />
           </div>
         </div>
       </template>
@@ -137,6 +141,8 @@ async function handleReload() {
 
 <style lang="scss" scoped>
 .locationsPage__tree {
+  min-height: 320px;
+
   /* Строка дерева на всю ширину: toggler слева, подпись растягивается */
   :deep(.p-treenode-content) {
     display: flex;
@@ -154,8 +160,8 @@ async function handleReload() {
   /* Разделение между корневыми узлами (только прямые li в ul.p-tree-container, не вложенные) */
   :deep(.p-tree-container > li.p-treenode:not(:last-child)) {
     border-bottom: 1px solid var(--surface-border, #dee2e6);
-    padding-bottom: 10px;
-    margin-bottom: 10px;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
   }
 }
 </style>

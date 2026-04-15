@@ -20,7 +20,7 @@ export const usePlantsStore = defineStore('plants', {
     },
     pagination: {
       page: 1,
-      perPage: 30,
+      perPage: 20,
       total: 0
     },
     isLoading: false,

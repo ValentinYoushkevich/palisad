@@ -12,6 +12,7 @@ import ScannerPage from '@/pages/scanner/ScannerPage.vue'
 import StaffPage from '@/pages/staff/StaffPage.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useNurseryStore } from '@/stores/nursery.store'
+import { isMobileDevice } from '@/utils/device'
 import { createRouter, createWebHistory } from 'vue-router'
 
 const ROLE_OWNER = 'owner'
@@ -149,6 +150,10 @@ router.beforeEach(async (to) => {
   }
 
   if (authStore.isAuthenticated) {
+    if (to.path === '/scanner' && !isMobileDevice()) {
+      return { path: '/plants' }
+    }
+
     if (authStore.mustChangePassword && !routeFlags.isChangePasswordRoute) {
       return { path: '/change-password' }
     }

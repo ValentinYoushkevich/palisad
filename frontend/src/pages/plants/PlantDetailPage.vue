@@ -1,9 +1,12 @@
 <template>
-  <section class="flex flex-col gap-2.5">
+  <section class="page-shell flex flex-col gap-3">
     <div class="flex items-start justify-between gap-3">
       <div>
         <h2>Карточка растения</h2>
-        <p class="text-sm text-gray-500">ID: {{ route.params.id }}</p>
+        <p class="text-sm text-gray-500">
+          ID: <span class="font-mono">{{ shortPlantId }}</span>
+          <span class="ml-1 text-xs text-gray-400">({{ plantId }})</span>
+        </p>
       </div>
       <div class="flex gap-2">
         <Button label="Назад к реестру" text @click="router.push('/plants')" />
@@ -22,18 +25,22 @@
       {{ operationsStore.operationsError }}
     </Message>
 
-    <OperationTimeline
-      :operations="operationsStore.forPlant(plantId)"
-      :isLoading="operationsStore.isLoading"
-      :canEdit="authStore.canWrite"
-      @delete="handleDelete"
-    />
-    <MovementHistory
-      :movements="movementsStore.forPlant(plantId)"
-      :isLoading="movementsStore.isLoading"
-      :canDelete="canDeleteMovement"
-      @delete="handleDeleteMovement"
-    />
+    <div class="page-panel">
+      <OperationTimeline
+        :operations="operationsStore.forPlant(plantId)"
+        :isLoading="operationsStore.isLoading"
+        :canEdit="authStore.canWrite"
+        @delete="handleDelete"
+      />
+    </div>
+    <div class="page-panel">
+      <MovementHistory
+        :movements="movementsStore.forPlant(plantId)"
+        :isLoading="movementsStore.isLoading"
+        :canDelete="canDeleteMovement"
+        @delete="handleDeleteMovement"
+      />
+    </div>
 
     <OperationCreateDialog
       v-model:visible="createOperationVisible"
@@ -80,6 +87,7 @@ const createOperationVisible = ref(false)
 const createMovementVisible = ref(false)
 
 const plantId = computed(() => String(route.params.id || ''))
+const shortPlantId = computed(() => plantId.value.slice(0, 8))
 const canDeleteMovement = computed(() => authStore.isOwner || authStore.isAgronomist)
 
 onMounted(async () => {

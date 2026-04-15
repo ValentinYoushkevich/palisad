@@ -1,41 +1,38 @@
 <template>
-  <section class="flex max-w-[360px] flex-col gap-3">
-    <h2>Change password</h2>
-    <p>Для продолжения необходимо обновить пароль.</p>
+  <section class="changePasswordPage">
+    <form class="changePasswordPage__card" @submit.prevent="submitChangePassword">
+      <h1 class="changePasswordPage__title">Смена пароля</h1>
+      <p class="changePasswordPage__subtitle">Для продолжения необходимо обновить пароль.</p>
 
-    <div class="flex flex-col gap-1.5">
-      <label for="currentPassword">Current password</label>
-      <Password
-        id="currentPassword"
-        v-model="currentPassword"
-        :feedback="false"
-        toggleMask
-      />
-    </div>
+      <div class="changePasswordPage__field">
+        <label for="currentPassword">Текущий пароль</label>
+        <Password id="currentPassword" v-model="currentPassword" :feedback="false" toggleMask />
+      </div>
 
-    <div class="flex flex-col gap-1.5">
-      <label for="newPassword">New password</label>
-      <Password id="newPassword" v-model="newPassword" toggleMask />
-    </div>
+      <div class="changePasswordPage__field">
+        <label for="newPassword">Новый пароль</label>
+        <Password id="newPassword" v-model="newPassword" toggleMask />
+      </div>
 
-    <div class="flex flex-col gap-1.5">
-      <label for="confirmPassword">Confirm password</label>
-      <Password id="confirmPassword" v-model="confirmPassword" :feedback="false" toggleMask />
-    </div>
+      <div class="changePasswordPage__field">
+        <label for="confirmPassword">Подтверждение пароля</label>
+        <Password id="confirmPassword" v-model="confirmPassword" :feedback="false" toggleMask />
+      </div>
 
-    <Message v-if="errorText" severity="error">{{ errorText }}</Message>
-    <Message v-if="successText" severity="success">{{ successText }}</Message>
+      <Message v-if="errorText" severity="error">{{ errorText }}</Message>
+      <Message v-if="successText" severity="success">{{ successText }}</Message>
 
-    <div class="flex gap-2">
-      <Button :loading="authStore.isLoading" label="Save new password" @click="submitChangePassword" />
-      <Button
-        :disabled="authStore.isLoading"
-        label="Logout"
-        severity="secondary"
-        outlined
-        @click="logout"
-      />
-    </div>
+      <div class="changePasswordPage__actions">
+        <Button :loading="authStore.isLoading" label="Сохранить пароль" type="submit" />
+        <Button
+          :disabled="authStore.isLoading"
+          label="Выйти"
+          severity="secondary"
+          outlined
+          @click="logout"
+        />
+      </div>
+    </form>
   </section>
 </template>
 
@@ -84,3 +81,52 @@ async function submitChangePassword() {
   await router.push('/plants')
 }
 </script>
+
+<style lang="scss" scoped>
+.changePasswordPage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #f3f4f6;
+}
+
+.changePasswordPage__card {
+  width: 100%;
+  max-width: 460px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.changePasswordPage__title {
+  margin: 0;
+  font-size: 24px;
+}
+
+.changePasswordPage__subtitle {
+  margin: 0;
+  color: #6b7280;
+}
+
+.changePasswordPage__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.changePasswordPage__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.changePasswordPage__field :deep(.p-password),
+.changePasswordPage__field :deep(.p-password-input) {
+  width: 100%;
+}
+</style>

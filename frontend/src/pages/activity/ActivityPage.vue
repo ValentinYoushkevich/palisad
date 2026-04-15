@@ -1,5 +1,5 @@
 <template>
-  <section class="flex flex-col gap-3">
+  <section class="page-shell flex flex-col gap-3">
     <div class="flex items-center justify-between">
       <h2>Лента активности</h2>
       <Button
@@ -10,7 +10,9 @@
       />
     </div>
 
-    <ActivityFilters @change="activityStore.fetchLogs(true)" />
+    <div class="page-panel">
+      <ActivityFilters @change="activityStore.fetchLogs(true)" />
+    </div>
 
     <Message v-if="activityStore.activityError" severity="error">
       {{ activityStore.activityError }}

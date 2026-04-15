@@ -53,7 +53,8 @@ import SyncStatusBadge from '@/components/SyncStatusBadge.vue'
 import { useSyncManager } from '@/composables/useSyncManager'
 import { useAuthStore } from '@/stores/auth.store'
 import { useNurseryStore } from '@/stores/nursery.store'
-import { computed, onMounted } from 'vue'
+import { isMobileDevice } from '@/utils/device'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 defineOptions({ name: 'AppLayout' })
@@ -62,15 +63,15 @@ const authStore = useAuthStore()
 const nurseryStore = useNurseryStore()
 const router = useRouter()
 const { processQueue } = useSyncManager()
+const isMobileClient = ref(false)
 const roleText = computed(() => authStore.roleLabels.join(', ') || authStore.roleLabel || '—')
-const hasAdminAccess = computed(() => authStore.canManageStructure || authStore.canManageStaff || authStore.isOwner)
 
 const commonNavItems = computed(() => {
   const items = [
     {
       to: '/plants',
       label: 'Растения',
-      visible: authStore.isAuthenticated && !hasAdminAccess.value
+      visible: authStore.isAuthenticated
     },
     {
       to: '/nursery/create',
@@ -90,7 +91,7 @@ const commonNavItems = computed(() => {
     {
       to: '/scanner',
       label: 'Сканер',
-      visible: authStore.canWrite
+      visible: authStore.canWrite && isMobileClient.value
     },
     {
       to: '/activity',
@@ -109,11 +110,6 @@ const commonNavItems = computed(() => {
 
 const adminNavItems = computed(() => {
   const items = [
-    {
-      to: '/plants',
-      label: 'Растения',
-      visible: authStore.canManageStructure
-    },
     {
       to: '/locations',
       label: 'Создание участков и секций',
@@ -145,6 +141,7 @@ async function handleLogout() {
 }
 
 onMounted(() => {
+  isMobileClient.value = isMobileDevice()
   processQueue()
 })
 </script>

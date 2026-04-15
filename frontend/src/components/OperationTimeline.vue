@@ -33,8 +33,8 @@
           </div>
 
           <div v-if="canEdit" class="mt-2 flex gap-1">
-            <Button icon="pi pi-pencil" size="small" text @click="emit('edit', item)" />
-            <Button icon="pi pi-trash" severity="danger" size="small" text @click="emit('delete', item)" />
+            <Button class="ui-action-icon" icon="pi pi-pencil" severity="secondary" size="small" outlined @click="emit('edit', item)" />
+            <Button class="ui-action-icon" icon="pi pi-trash" severity="danger" size="small" outlined @click="emit('delete', item)" />
           </div>
         </div>
       </template>

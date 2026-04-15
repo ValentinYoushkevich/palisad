@@ -1,5 +1,5 @@
 <template>
-  <section class="flex flex-col gap-3">
+  <section class="page-shell flex flex-col gap-3">
     <h2>Печать этикеток</h2>
 
     <Message v-if="!nurseryStore.hasFeature('feature_qr')" severity="warn">
@@ -40,28 +40,22 @@
         </DataTable>
       </div>
 
-      <div class="flex items-center gap-6">
-        <div>
-          <span class="mr-2">Формат:</span>
-          <SelectButton
-            v-model="layout"
-            :options="LAYOUT_OPTIONS"
-            optionLabel="label"
-            optionValue="value"
-          />
+      <div class="page-panel labelsPage__controls">
+        <div class="labelsPage__format">
+          <span class="labelsPage__muted">Формат:</span>
+          <SelectButton v-model="layout" :options="LAYOUT_OPTIONS" optionLabel="label" optionValue="value" />
         </div>
-        <div class="text-sm text-gray-500">
+        <div class="labelsPage__muted">
           Выбрано: {{ selectedPlants.length }} растений
         </div>
+        <Button
+          :disabled="!selectedPlants.length"
+          :loading="isGenerating"
+          icon="pi pi-download"
+          label="Скачать PDF"
+          @click="handleGenerate"
+        />
       </div>
-
-      <Button
-        :disabled="!selectedPlants.length"
-        :loading="isGenerating"
-        icon="pi pi-download"
-        label="Скачать PDF"
-        @click="handleGenerate"
-      />
     </template>
   </section>
 </template>
@@ -105,3 +99,24 @@ async function handleGenerate() {
   isGenerating.value = false
 }
 </script>
+
+<style lang="scss" scoped>
+.labelsPage__controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.labelsPage__format {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.labelsPage__muted {
+  color: #6b7280;
+  font-size: 14px;
+}
+</style>

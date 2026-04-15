@@ -1,5 +1,5 @@
 <template>
-  <section class="flex flex-col gap-3">
+  <section class="page-shell flex flex-col gap-3">
     <div class="flex items-center justify-between">
       <h2>Сотрудники</h2>
       <Button
@@ -41,12 +41,13 @@
       </Column>
       <Column v-if="authStore.canManageStaff" header="Действия">
         <template #body="{ data }">
-          <div class="flex gap-1">
-            <Button icon="pi pi-pencil" text @click="openEdit(data)" />
+          <div class="flex gap-2">
+            <Button class="ui-action-icon" icon="pi pi-pencil" severity="secondary" outlined @click="openEdit(data)" />
             <Button
+              class="ui-action-icon"
               :icon="toggleIcon(data)"
               :severity="toggleSeverity(data)"
-              text
+              outlined
               @click="handleToggle(data.id)"
             />
           </div>

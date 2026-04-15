@@ -1,15 +1,16 @@
 <template>
-  <section class="flex flex-col gap-3">
+  <section class="page-shell scannerPage">
+    <div class="page-panel scannerPage__panel">
     <h2>Сканирование QR-кода</h2>
 
-    <div v-if="!manualMode">
+    <div v-if="canUseCamera && !manualMode">
       <QrScanner @error="handleCameraError" @scanned="handleScanned" />
       <div class="mt-2 flex justify-center">
         <Button label="Ввести код вручную" text @click="manualMode = true" />
       </div>
     </div>
 
-    <div v-else class="max-w-[520px]">
+    <div v-else class="max-w-[560px]">
       <div class="flex flex-col gap-1.5">
         <label for="manualCode">Числовой код растения</label>
         <div class="flex gap-2">
@@ -24,18 +25,23 @@
         </div>
         <small>Код указан на этикетке под QR-кодом</small>
       </div>
-      <Button label="Открыть камеру" text @click="manualMode = false" />
+      <Button v-if="canUseCamera" label="Открыть камеру" text @click="openCamera" />
+      <Message v-else severity="info">
+        Сканирование камерой доступно только с мобильного устройства.
+      </Message>
     </div>
 
     <Message v-if="notFound" severity="warn">
       Растение не найдено. Проверьте код или отсканируйте снова.
     </Message>
+    </div>
   </section>
 </template>
 
 <script setup>
 import QrScanner from '@/components/QrScanner.vue'
 import { usePlantsStore } from '@/stores/plants.store'
+import { isMobileDevice } from '@/utils/device'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -43,7 +49,8 @@ defineOptions({ name: 'ScannerPage' })
 
 const router = useRouter()
 const plantsStore = usePlantsStore()
-const manualMode = ref(false)
+const canUseCamera = isMobileDevice()
+const manualMode = ref(!canUseCamera)
 const manualCode = ref('')
 const isSearching = ref(false)
 const notFound = ref(false)
@@ -64,6 +71,14 @@ function handleCameraError() {
   manualMode.value = true
 }
 
+function openCamera() {
+  if (!canUseCamera) {
+    return
+  }
+
+  manualMode.value = false
+}
+
 async function handleManualSearch() {
   if (!manualCode.value.trim()) {
     return
@@ -82,3 +97,17 @@ async function handleManualSearch() {
   isSearching.value = false
 }
 </script>
+
+<style lang="scss" scoped>
+.scannerPage {
+  display: flex;
+  flex-direction: column;
+}
+
+.scannerPage__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 280px;
+}
+</style>

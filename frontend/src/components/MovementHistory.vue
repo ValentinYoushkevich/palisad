@@ -24,7 +24,7 @@
       </Column>
       <Column header="Тип">
         <template #body="{ data }">
-          <span>{{ data.type_name || data.type_id || '—' }}</span>
+          <span>{{ movementTypeLabel(data) }}</span>
           <Tag v-if="data._pending" class="ml-1.5" severity="warning" value="Ожидает" />
         </template>
       </Column>
@@ -46,10 +46,11 @@
         <template #body="{ data }">
           <Button
             v-if="!data._pending"
+            class="ui-action-icon"
             icon="pi pi-trash"
             severity="danger"
             size="small"
-            text
+            outlined
             @click="emit('delete', data)"
           />
         </template>
@@ -85,5 +86,17 @@ function formatDate(value) {
   }
 
   return new Date(value).toLocaleDateString('ru-RU')
+}
+
+function movementTypeLabel(movement) {
+  if (movement?.type_name) {
+    return movement.type_name
+  }
+
+  if (movement?.type_id) {
+    return `Тип #${String(movement.type_id).slice(0, 8)}`
+  }
+
+  return '—'
 }
 </script>

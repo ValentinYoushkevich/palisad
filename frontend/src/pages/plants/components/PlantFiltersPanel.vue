@@ -1,9 +1,10 @@
 <template>
-  <div class="grid grid-cols-6 gap-2">
-    <div class="min-w-0">
+  <div class="ui-filter-grid plantFilters">
+    <div class="plantFilters__cell plantFilters__cell--select">
       <label class="sr-only" for="plant-filter-status">Статус</label>
       <Select
         v-model="filters.status"
+        class="w-full"
         inputId="plant-filter-status"
         :options="STATUS_OPTIONS"
         optionLabel="label"
@@ -13,10 +14,11 @@
         @change="emit('change')"
       />
     </div>
-    <div class="min-w-0">
+    <div class="plantFilters__cell plantFilters__cell--select">
       <label class="sr-only" for="plant-filter-species">Вид</label>
       <Select
         v-model="filters.speciesId"
+        class="w-full"
         inputId="plant-filter-species"
         :options="speciesStore.activeSpecies"
         optionLabel="display_name_ru"
@@ -27,10 +29,11 @@
         @change="emit('change')"
       />
     </div>
-    <div class="min-w-0">
+    <div class="plantFilters__cell plantFilters__cell--select">
       <label class="sr-only" for="plant-filter-container">Контейнер</label>
       <Select
         v-model="filters.containerId"
+        class="w-full"
         inputId="plant-filter-container"
         :options="containerTypesStore.activeTypes"
         optionLabel="name"
@@ -40,9 +43,19 @@
         @change="emit('change')"
       />
     </div>
-    <InputText v-model="filters.numericCode" placeholder="Числовой код" @input="emit('change')" />
-    <InputText v-model="filters.search" placeholder="Поиск..." @input="emit('change')" />
-    <Button label="Сбросить" text @click="resetFilters" />
+    <InputText
+      v-model="filters.numericCode"
+      class="plantFilters__cell plantFilters__cell--input"
+      placeholder="Числовой код"
+      @input="emit('change')"
+    />
+    <InputText
+      v-model="filters.search"
+      class="plantFilters__cell plantFilters__cell--input"
+      placeholder="Поиск..."
+      @input="emit('change')"
+    />
+    <Button class="plantFilters__cell plantFilters__cell--reset" label="Сбросить" text @click="resetFilters" />
   </div>
 </template>
 
@@ -73,3 +86,37 @@ function resetFilters() {
   emit('change')
 }
 </script>
+
+<style lang="scss" scoped>
+.plantFilters__cell--select,
+.plantFilters__cell--input {
+  grid-column: span 2;
+}
+
+.plantFilters__cell--reset {
+  grid-column: span 2;
+  justify-self: start;
+}
+
+.plantFilters :deep(.p-select),
+.plantFilters :deep(.p-inputtext) {
+  width: 100%;
+  min-height: var(--control-height);
+}
+
+@media (max-width: 1200px) {
+  .plantFilters__cell--select,
+  .plantFilters__cell--input,
+  .plantFilters__cell--reset {
+    grid-column: span 3;
+  }
+}
+
+@media (max-width: 900px) {
+  .plantFilters__cell--select,
+  .plantFilters__cell--input,
+  .plantFilters__cell--reset {
+    grid-column: span 6;
+  }
+}
+</style>

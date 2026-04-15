@@ -164,9 +164,14 @@
           <Column field="side_cm" header="Сторона (см)">
             <template #body="{ data }">{{ data.side_cm ?? '—' }}</template>
           </Column>
+          <Column header="Служебный">
+            <template #body="{ data }">
+              <Tag :value="systemLabel(data.is_system)" :severity="systemSeverity(data.is_system)" />
+            </template>
+          </Column>
           <Column v-if="authStore.canManageStructure" header="Действия">
             <template #body="{ data }">
-              <Button icon="pi pi-pencil" text @click="openEditContainerType(data)" />
+              <Button v-if="!data.is_system" icon="pi pi-pencil" text @click="openEditContainerType(data)" />
             </template>
           </Column>
         </template>
@@ -477,6 +482,10 @@ function openCreateContainerType() {
   containerDialogVisible.value = true
 }
 function openEditContainerType(item) {
+  if (item.is_system) {
+    containerTypesStore.containerTypesError = 'Системный тип контейнера нельзя изменять.'; containerDialogVisible.value = false
+    return
+  }
   containerEditingId.value = item.id
   containerForm.value = {
     code: item.code || '',

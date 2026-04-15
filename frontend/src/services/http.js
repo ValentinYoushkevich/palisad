@@ -67,11 +67,6 @@ http.interceptors.response.use(
     const isRefreshRequest = originalRequest?.url?.includes('/auth/refresh')
     const isLoginRequest = originalRequest?.url?.includes('/auth/login')
 
-    if (status === 403) {
-      logoutAndRedirect()
-      throw error
-    }
-
     if (status !== 401 || originalRequest._retry || isRefreshRequest || isLoginRequest) {
       if (status === 401 && isRefreshRequest) {
         logoutAndRedirect()

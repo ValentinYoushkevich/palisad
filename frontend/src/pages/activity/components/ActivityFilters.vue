@@ -1,7 +1,8 @@
 <template>
-  <div class="flex flex-wrap gap-2">
+  <div class="ui-filter-grid activityFilters">
     <DatePicker
       v-model="dateFrom"
+      class="activityFilters__control"
       dateFormat="dd.mm.yy"
       placeholder="От"
       showIcon
@@ -9,15 +10,17 @@
     />
     <DatePicker
       v-model="dateTo"
+      class="activityFilters__control"
       dateFormat="dd.mm.yy"
       placeholder="До"
       showIcon
       @date-select="onFilterChange"
     />
-    <div class="min-w-0">
+    <div class="activityFilters__control">
       <label class="sr-only" for="activity-event-type">Тип события</label>
       <Select
         v-model="eventType"
+        class="w-full"
         inputId="activity-event-type"
         :options="EVENT_TYPE_OPTIONS"
         optionLabel="label"
@@ -72,3 +75,26 @@ function onFilterChange() {
   emit('change')
 }
 </script>
+
+<style lang="scss" scoped>
+.activityFilters__control {
+  grid-column: span 3;
+  min-width: 0;
+}
+
+.activityFilters :deep(.p-datepicker),
+.activityFilters :deep(.p-select) {
+  width: 100%;
+}
+
+.activityFilters :deep(.p-datepicker-input),
+.activityFilters :deep(.p-select-label) {
+  min-height: var(--control-height);
+}
+
+@media (max-width: 900px) {
+  .activityFilters__control {
+    grid-column: span 6;
+  }
+}
+</style>

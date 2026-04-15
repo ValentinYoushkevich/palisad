@@ -1,5 +1,5 @@
 <template>
-  <section class="flex flex-col gap-3">
+  <section class="page-shell flex flex-col gap-3">
     <div class="flex items-center justify-between">
       <h2>Реестр растений</h2>
       <div class="flex gap-2">
@@ -20,7 +20,9 @@
     </div>
 
     <Message v-if="plantsStore.plantsError" severity="error">{{ plantsStore.plantsError }}</Message>
-    <PlantFiltersPanel @change="handleFilterChange" />
+    <div class="page-panel">
+      <PlantFiltersPanel @change="handleFilterChange" />
+    </div>
 
     <DataTable
       :value="plantsStore.filtered"
@@ -66,7 +68,7 @@
       </Column>
       <Column>
         <template #body="{ data }">
-          <Button icon="pi pi-eye" text @click="openPlant(data.id)" />
+          <Button class="ui-action-icon" icon="pi pi-eye" severity="secondary" outlined @click="openPlant(data.id)" />
         </template>
       </Column>
     </DataTable>
@@ -115,7 +117,7 @@ const { isOnline } = useOnlineStatus()
 
 const createVisible = ref(false)
 const bulkVisible = ref(false)
-const showCreateActions = computed(() => authStore.canManageStructure && isOnline.value)
+const showCreateActions = computed(() => (authStore.isOwner || authStore.isAgronomist) && isOnline.value)
 
 onMounted(async () => {
   await Promise.all([
