@@ -1,24 +1,19 @@
 <template>
   <Dialog
     :visible="visible"
-    header="Редактирование локации"
+    header="Редактирование"
     modal
     style="width: 420px"
     @update:visible="emitVisible"
   >
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="editLocationName">Название</label>
-      <InputText id="editLocationName" v-model="form.name" class="w-full" />
-    </div>
-    <div class="mb-3 flex flex-col gap-1.5">
-      <label for="editLocationType">Тип</label>
-      <Select
-        id="editLocationType"
-        v-model="form.type"
-        :options="TYPE_OPTIONS"
+      <InputText
+        id="editLocationName"
+        v-model="form.name"
         class="w-full"
-        optionLabel="label"
-        optionValue="value"
+        autofocus
+        @keyup.enter="handleSave"
       />
     </div>
 
@@ -28,7 +23,12 @@
 
     <template #footer>
       <Button label="Отмена" text @click="emitVisible(false)" />
-      <Button :loading="locationsStore.isLoading" label="Сохранить" @click="handleSave" />
+      <Button
+        :loading="locationsStore.isLoading"
+        label="Сохранить"
+        :disabled="!form.name.trim()"
+        @click="handleSave"
+      />
     </template>
   </Dialog>
 </template>
@@ -53,29 +53,12 @@ const props = defineProps({
 const emit = defineEmits(['update:visible', 'updated'])
 const locationsStore = useLocationsStore()
 
-const TYPE_OPTIONS = [
-  { label: 'Участок', value: 'area' },
-  { label: 'Секция', value: 'section' },
-  { label: 'Ряд', value: 'row' },
-  { label: 'Место', value: 'place' }
-]
-
-const form = ref({
-  name: '',
-  type: 'section'
-})
+const form = ref({ name: '' })
 
 watch(
   () => props.location,
   (location) => {
-    if (!location) {
-      return
-    }
-
-    form.value = {
-      name: location.name || '',
-      type: location.type || 'section'
-    }
+    if (location) form.value = { name: location.name || '' }
   },
   { immediate: true }
 )
@@ -85,18 +68,14 @@ function emitVisible(value) {
 }
 
 async function handleSave() {
-  if (!props.location?.id) {
-    return
-  }
+  if (!props.location?.id || !form.value.name.trim()) return
 
   const result = await locationsStore.updateLocation(props.location.id, {
-    name: form.value.name,
-    type: form.value.type
+    name: form.value.name.trim(),
+    type: props.location.type,
   })
 
-  if (!result?.ok) {
-    return
-  }
+  if (!result?.ok) return
 
   emit('updated')
   emitVisible(false)
