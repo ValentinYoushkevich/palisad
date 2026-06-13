@@ -294,3 +294,5 @@ app.use('/api/nurseries/:nurseryId/plants/:plantId/operations', operationRouter)
 | 6 | `transplant` обновляет `plants.container_id` | `POST .../operations` с `type=transplant` и `newContainerId` |
 | 7 | Мягкое удаление операции | `DELETE .../operations/:id` -> `deleted_at` установлен, в GET не отображается |
 | 8 | Observer не может создать операцию -> 403 | Войти как observer, `POST .../operations` |
+
+Реализовано — критерии 1–8 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12; прикрепление фото дополнительно проверено при включённой `feature_photos`).

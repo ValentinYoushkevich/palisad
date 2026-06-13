@@ -189,3 +189,5 @@ app.get('/api/plans', requireAuth, subscriptionController.getPlans);
 | 4 | `checkFeature` блокирует при отсутствии фичи | Вызвать `checkFeature(accountId, 'feature_tags')` при плане `free` → AppError 403 |
 | 5 | `checkLimit` блокирует при превышении | `checkLimit(accountId, 'plant_limit', 300)` при лимите 300 → AppError 403 |
 | 6 | Несуществующий planId → 404 | `POST /api/subscriptions/change` с невалидным UUID |
+
+Реализовано — критерии 1–6 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12).

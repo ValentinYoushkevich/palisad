@@ -217,3 +217,6 @@ app.use('/api/nurseries/:nurseryId/plants', labelsRouter);
 | 5 | Layout `single` — страница на растение | Запросить 3 растения с `layout: 'single'` → PDF из 3 страниц |
 | 6 | Этикетка содержит QR и numeric code | Проверка визуально в PDF |
 | 7 | Этикетка содержит вид, сорт и контейнер | Проверка строк `display_name_ru/scientific_name`, `variety`, `container_code` |
+
+Реализовано — критерии 1–5 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12; число страниц PDF проверено по объектам `/Type /Page`).
+Критерии 6–7 сверены по коду `src/utils/generateLabelsPdf.js` (рисует QR, qr_code, numeric_code, вид/сорт, контейнер, дату посадки, локацию); финальная визуальная проверка печати — за пользователем.

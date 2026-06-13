@@ -269,3 +269,5 @@ export function countByAccountId(accountId) {
 | 4 | Питомник не найден → 404 | `GET /api/nurseries/my` до создания |
 | 5 | Обновление питомника обновляет `updated_at` | `PATCH /api/nurseries/my` → `updated_at` изменился в БД |
 | 6 | Без токена → 401 | Запросы без cookie |
+
+Реализовано — критерии 1–6 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12).

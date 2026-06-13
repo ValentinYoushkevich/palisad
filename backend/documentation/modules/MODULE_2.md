@@ -404,3 +404,6 @@ export function getActive(accountId) {
 | 7 | Смена пароля работает | `POST /api/auth/change-password` с requireAuth → 200 |
 | 8 | Слабый пароль при регистрации → 400 | Передать `password: "123"` → ошибки валидации Zod |
 | 9 | Защищённый роут без токена → 401 | `POST /api/auth/change-password` без куки → 401 |
+
+Реализовано — критерии 1–9 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12).
+Известное ограничение: логин работает только для владельцев аккаунта (`accounts`); сотрудники из `users` войти через `POST /api/auth/login` не могут — см. `documentation/tasks/MvpStabilization.md`.

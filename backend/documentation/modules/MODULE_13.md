@@ -300,3 +300,7 @@ npm install node-cron
 | 7 | Пагинация работает | `GET .../activity?page=2&perPage=10` |
 | 8 | Cron запускается при старте | В логах Winston: `Cleanup cron started` |
 | 9 | Cron удаляет старые записи | Вручную вставить запись с `created_at = '2020-01-01'`, запустить функцию cleanup → запись удалена |
+
+Реализовано — критерии 1–2, 4–7, 9 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12).
+Критерий 3 сверен по коду: `logActivity` обёрнут в try/catch с `logger.error`. Критерий 8 подтверждён
+записью `Cleanup cron started` в `backend/logs/combined.log` при старте сервера.

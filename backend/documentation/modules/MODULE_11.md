@@ -222,3 +222,5 @@ app.use('/api/nurseries/:nurseryId/plants/:plantId/movements', movementRouter);
 | 6 | Observer не может создать движение → 403 | Войти как observer, `POST .../movements` |
 | 7 | Удаление движения worker → 403 | Войти как worker, `DELETE .../movements/:id` |
 | 8 | История движений содержит имена локаций | `GET .../movements` → поля `from_location_name`, `to_location_name` |
+
+Реализовано — критерии 1–8 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12).

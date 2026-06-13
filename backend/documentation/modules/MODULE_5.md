@@ -285,3 +285,7 @@ app.use('/api/nurseries/:nurseryId/users', staffRouter);
 | 5 | Фильтр по роли работает | `GET .../users?role=worker` → только workers |
 | 6 | Изменение роли обновляет `updated_at` | Проверить в БД после `PATCH .../role` |
 | 7 | Нельзя назначить роль `owner` через API | `PATCH .../role` с `role: 'owner'` → ошибка Zod |
+
+Реализовано — критерии 1–7 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12).
+Известное ограничение: созданный сотрудник не может залогиниться (login ищет email только в `accounts`) —
+см. `documentation/tasks/MvpStabilization.md`.

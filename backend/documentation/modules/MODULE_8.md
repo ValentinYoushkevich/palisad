@@ -76,3 +76,5 @@
 | 4 | Системные `movement_types` защищены | `PATCH/DELETE` системного типа -> 400/403 |
 | 5 | Системные `container_types` защищены | `PATCH/DELETE` системного типа -> 400/403 |
 | 6 | Удаление используемого container type не физическое | `DELETE .../container-types/:id` -> `is_active=false` |
+
+Реализовано — критерии 1–6 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12; GBIF-поиск проверен на живом API).

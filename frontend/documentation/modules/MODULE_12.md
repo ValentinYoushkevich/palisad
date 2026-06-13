@@ -309,3 +309,11 @@ onMounted(async () => {
 | 6 | Фото загружается после синхронизации операции | Прикрепить фото офлайн → после sync фото видно на сервере |
 | 7 | Конфликт: серверная версия побеждает | Изменить запись и на сервере и офлайн → после sync — серверная версия |
 | 8 | Порядок синка: операции/движения → фото | Проверить порядок в логах DevTools |
+
+Реализовано (код-ревью `useSyncManager.js` → `syncQueue.service.js`, 2026-06-13):
+критерии 4, 5, 6, 8 подтверждены по коду (`markFailed`: `retries >= 3 → failed` + Toast через
+`getById`; `retryFailed` сброс; порядок не-фото → фото в `processQueue`). Критерии 1–3 требуют
+ручного теста в браузере (Service Worker, переключение сети, UI `SyncStatusBadge`).
+**Критерий 7 (server-wins) в коде не реализован** — нет версионирования/conflict-resolution,
+офлайн-правка переигрывается обычным `PATCH` (де-факто last-write-wins). Полноценный server-wins —
+задача v2. Подробности — [`documentation/tasks/MvpStabilization.md`](../../../documentation/tasks/MvpStabilization.md).

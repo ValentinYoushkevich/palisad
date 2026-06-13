@@ -1,6 +1,6 @@
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { getPendingPhotos, markPhotoDone, markPhotoFailed } from '@/db/pendingPhotos.service'
-import { getFailedCount, getPending, markDone, markFailed } from '@/db/syncQueue.service'
+import { getById, getFailedCount, getPending, markDone, markFailed } from '@/db/syncQueue.service'
 import http from '@/services/http'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { useToast } from 'primevue/usetoast'
@@ -88,8 +88,7 @@ async function processItem(item, toast) {
 
     await markFailed(item.id)
 
-    const pendingItems = await getPending()
-    const current = pendingItems.find((pendingItem) => pendingItem.id === item.id)
+    const current = await getById(item.id)
     if (current?.status === 'failed') {
       toast.add({
         severity: 'warn',

@@ -28,6 +28,10 @@ export async function getPending() {
     .sortBy('timestamp')
 }
 
+export async function getById(id) {
+  return db.table('sync_queue').get(id)
+}
+
 export async function markFailed(id) {
   const item = await db.table('sync_queue').get(id)
 

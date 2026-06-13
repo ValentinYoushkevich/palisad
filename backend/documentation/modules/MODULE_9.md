@@ -419,3 +419,5 @@ app.use('/api/nurseries/:nurseryId/plants', plantRouter);
 | 7 | Теги требуют feature_tags | Добавить тег при плане `free` → 403 |
 | 8 | Фильтрация по контейнеру и numeric code работает | `GET .../plants?containerId=...&numericCode=...` |
 | 9 | Пагинация работает | `GET .../plants?page=2&perPage=10` → вторая страница |
+
+Реализовано — критерии 1–9 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12; лимит растений проверен временным снижением `plant_limit`, а не созданием 300 записей).
