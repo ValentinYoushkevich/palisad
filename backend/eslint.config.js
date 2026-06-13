@@ -44,4 +44,15 @@ export default [
       'space-infix-ops': 'error',
     },
   },
+  {
+    // Тесты: моки возвращают промисы без await, describe-блоки длинные,
+    // файлы крупные — эти стилевые правила к тестам не применяем.
+    files: ['tests/**/*.js'],
+    rules: {
+      'require-await': 'off',
+      'max-lines-per-function': 'off',
+      'max-lines': 'off',
+      'no-console': 'off',
+    },
+  },
 ];

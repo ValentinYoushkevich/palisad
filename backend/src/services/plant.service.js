@@ -8,10 +8,11 @@ import { generateQrCode } from '@/utils/qrCode.js';
 
 export async function getPlants(nurseryId, filters) {
   const { page, perPage, ...rest } = filters;
-  const all = await plantRepo.findAllByNursery(nurseryId, rest);
-  const total = all.length;
-  const start = (page - 1) * perPage;
-  const data = all.slice(start, start + perPage);
+  const offset = (page - 1) * perPage;
+  const [data, total] = await Promise.all([
+    plantRepo.findPage(nurseryId, rest, { limit: perPage, offset }),
+    plantRepo.countFiltered(nurseryId, rest),
+  ]);
   return { data, total, page, perPage };
 }
 

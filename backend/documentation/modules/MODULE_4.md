@@ -123,8 +123,10 @@ router.patch('/:id/role', requireRole(...STAFF_ROLES), controller.changeRole);
 | 3 | Без токена → 401 | Запрос без куки |
 | 4 | Хелперы импортируются из `rbac.js` | Проверить что сервисы используют `canWrite`, `canManageStructure` |
 
-Реализовано — критерии 1–3 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12).
-Критерий 4 не соответствует реализации: `src/utils/rbac.js` — мёртвый код (нигде не импортируется);
-RBAC фактически реализован через middleware `requireRole`/`requireNurseryAccess` и точечные проверки
-ролей в сервисах. Роль-токены сотрудников в тестах подписаны напрямую, т.к. staff-логин в API
-отсутствует — см. `documentation/tasks/MvpStabilization.md`.
+Реализовано — критерии 1–3 прогнаны скриптом `backend/scripts/acceptance-check.mjs` (2026-06-12)
+и интеграционными тестами `backend/tests/rbac.test.js` (2026-06-13).
+Критерий 4 не соответствует реализации: `src/utils/rbac.js` был мёртвым кодом (нигде не
+импортировался) и **удалён** в рамках `BackendHardening` (2026-06-13). RBAC фактически реализован
+через middleware `requireRole`/`requireNurseryAccess` и точечные проверки ролей в сервисах.
+Роль-токены сотрудников в тестах подписаны напрямую, т.к. staff-логин в API отсутствует —
+см. `documentation/tasks/MvpStabilization.md`.

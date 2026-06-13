@@ -1,20 +1,13 @@
 import db from '@/config/knex.js';
 
-export function findAllByNursery(nurseryId, filters = {}) {
+function buildListQuery(nurseryId, filters = {}) {
   const query = db('plants')
     .where('plants.nursery_id', nurseryId)
     .whereNull('plants.deleted_at')
     .leftJoin('nursery_species', 'plants.nursery_species_id', 'nursery_species.id')
     .leftJoin('species_catalog', 'nursery_species.species_catalog_id', 'species_catalog.id')
     .leftJoin('locations', 'plants.location_id', 'locations.id')
-    .leftJoin('container_types', 'plants.container_id', 'container_types.id')
-    .select(
-      'plants.*',
-      'species_catalog.scientific_name',
-      'nursery_species.display_name_ru',
-      'locations.name as location_name',
-      'container_types.code as container_code'
-    );
+    .leftJoin('container_types', 'plants.container_id', 'container_types.id');
 
   if (filters.status) {
     query.where('plants.status', filters.status);
@@ -50,6 +43,37 @@ export function findAllByNursery(nurseryId, filters = {}) {
   return query;
 }
 
+// Страница списка: пагинация и порядок — в SQL (LIMIT/OFFSET), а не выборкой всех
+// строк в память. Стабильный ORDER BY (created_at + id) даёт устойчивые границы страниц.
+export function findPage(nurseryId, filters = {}, { limit, offset } = {}) {
+  const query = buildListQuery(nurseryId, filters)
+    .select(
+      'plants.*',
+      'species_catalog.scientific_name',
+      'nursery_species.display_name_ru',
+      'locations.name as location_name',
+      'container_types.code as container_code'
+    )
+    .orderBy('plants.created_at', 'desc')
+    .orderBy('plants.id', 'asc');
+
+  if (limit !== undefined && limit !== null) {
+    query.limit(limit);
+  }
+  if (offset) {
+    query.offset(offset);
+  }
+
+  return query;
+}
+
+// Счётчик с теми же фильтрами, что и findPage (корректный total при фильтрации).
+export function countFiltered(nurseryId, filters = {}) {
+  return buildListQuery(nurseryId, filters)
+    .countDistinct('plants.id as count')
+    .then((rows) => Number(rows[0].count));
+}
+
 export function countByNursery(nurseryId) {
   return db('plants')
     .where({ nursery_id: nurseryId })
@@ -64,6 +88,14 @@ export function findById(id) {
 
 export function findByNurseryAndId(nurseryId, id) {
   return db('plants').where({ nursery_id: nurseryId, id }).whereNull('deleted_at').first();
+}
+
+// Батч-выборка по списку id (один запрос вместо N — для генерации этикеток).
+export function findByNurseryAndIds(nurseryId, ids) {
+  return db('plants')
+    .where('nursery_id', nurseryId)
+    .whereIn('id', ids)
+    .whereNull('deleted_at');
 }
 
 export function findByQrCode(qrCode) {

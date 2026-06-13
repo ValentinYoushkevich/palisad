@@ -37,7 +37,8 @@ npm run dev              # nodemon, http://localhost:3100
 
 Health-check: `GET http://localhost:3100/api/health` → `{"status":"ok","db":"connected"}`.
 
-Прочие команды: `npm run start` (без nodemon), `npm run migrate:rollback`, `npm run lint`.
+Прочие команды: `npm run start` (без nodemon), `npm run migrate:rollback`, `npm run lint`,
+`npm test` / `npm run test:coverage` (интеграционные тесты, см. ниже).
 
 Сид в dev-режиме создаёт аккаунт `admin.owner@palisad.local` / `dev12345`.
 
@@ -72,7 +73,22 @@ palisad/
     src/                     # pages, stores, db (Dexie), composables
 ```
 
-## Приёмочные тесты backend
+## Тесты backend
+
+### Интеграционные тесты (Vitest + supertest)
+
+```bash
+cd backend
+npm test                 # vitest run (нужен только запущенный Postgres :5433)
+npm run test:coverage    # + отчёт покрытия v8
+```
+
+130 тестов покрывают модули 2–13 через реальный Express (supertest) и отдельную тестовую БД
+`palisad_test` (создаётся и мигрируется автоматически в `tests/globalSetup.js`; внешний GBIF API
+замокан). Покрытие: строки/функции — 93.8% / 98.1%, ветки — 82.7%. Backend поднимать **не нужно**
+(`app.js` импортируется напрямую), только Postgres.
+
+### Приёмочный прогон против живого API
 
 При запущенных Postgres и backend:
 
