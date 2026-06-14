@@ -4,6 +4,7 @@
       <h1 class="layout__title">Palisad</h1>
       <div class="layout__userPanel">
         <NurserySwitcher />
+        <NotificationBell />
         <SyncStatusBadge />
         <div class="layout__identity">
           <p class="layout__username">{{ authStore.userDisplayName }}</p>
@@ -51,18 +52,21 @@
 
 <script setup>
 import { useSyncManager } from '@/composables/useSyncManager'
+import NotificationBell from '@/layouts/components/NotificationBell.vue'
 import NurserySwitcher from '@/layouts/components/NurserySwitcher.vue'
 import SyncStatusBadge from '@/layouts/components/SyncStatusBadge.vue'
 import { useAuthStore } from '@/stores/auth.store'
+import { useNotificationsStore } from '@/stores/notifications.store'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { isMobileDevice } from '@/utils/device'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 defineOptions({ name: 'AppLayout' })
 
 const authStore = useAuthStore()
 const nurseryStore = useNurseryStore()
+const notificationsStore = useNotificationsStore()
 const router = useRouter()
 const { processQueue } = useSyncManager()
 const isMobileClient = ref(false)
@@ -145,6 +149,11 @@ async function handleLogout() {
 onMounted(() => {
   isMobileClient.value = isMobileDevice()
   processQueue()
+  notificationsStore.startPolling()
+})
+
+onBeforeUnmount(() => {
+  notificationsStore.stopPolling()
 })
 </script>
 

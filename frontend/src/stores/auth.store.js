@@ -1,5 +1,6 @@
 import { clearDomainTables } from '@/db/indexedDb'
 import http from '@/services/http'
+import { useNotificationsStore } from '@/stores/notifications.store'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { defineStore } from 'pinia'
 
@@ -136,12 +137,14 @@ export const useAuthStore = defineStore('auth', {
     },
     async logout() {
       const nurseryStore = useNurseryStore()
+      const notificationsStore = useNotificationsStore()
 
       try {
         await http.post('/auth/logout')
       } finally {
         this.clearSession()
         nurseryStore.resetState()
+        notificationsStore.resetState()
         await clearDomainTables()
       }
     },

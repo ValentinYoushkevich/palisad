@@ -1,10 +1,12 @@
 import argon2 from 'argon2';
 
 import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
+import { NOTIFICATION_TYPES } from '@/constants/notification.constants.js';
 import * as subscriptionRepo from '@/repositories/subscription.repository.js';
 import * as userRepo from '@/repositories/user.repository.js';
 import { AppError } from '@/utils/AppError.js';
 import { logActivity } from '@/utils/logActivity.js';
+import { notify } from '@/utils/notify.js';
 
 export function getUsers(nurseryId, filters) {
   return userRepo.findAllByNursery(nurseryId, {
@@ -57,6 +59,12 @@ export async function changeRole(nurseryId, id, role, actorUserId) {
     entityType: ENTITY_TYPES.USER,
     entityId: id,
     details: { role },
+  });
+  await notify({
+    nurseryId,
+    userId: id,
+    type: NOTIFICATION_TYPES.ROLE_CHANGED,
+    payload: { role, changedBy: actorUserId },
   });
   return user;
 }
