@@ -28,4 +28,21 @@ export const dbTables = {
   syncQueue: db.table('sync_queue')
 }
 
+export const DOMAIN_TABLES = [
+  'plants',
+  'locations',
+  'species',
+  'tags',
+  'movement_types',
+  'container_types',
+  'operations',
+  'movements',
+  'pending_photos',
+  'sync_queue'
+]
+
+export async function clearDomainTables() {
+  await Promise.all(DOMAIN_TABLES.map((name) => db.table(name).clear()))
+}
+
 export default db

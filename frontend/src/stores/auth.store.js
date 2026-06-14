@@ -1,4 +1,4 @@
-import db from '@/db/indexedDb'
+import { clearDomainTables } from '@/db/indexedDb'
 import http from '@/services/http'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { defineStore } from 'pinia'
@@ -142,7 +142,7 @@ export const useAuthStore = defineStore('auth', {
       } finally {
         this.clearSession()
         nurseryStore.resetState()
-        await clearLocalDb()
+        await clearDomainTables()
       }
     },
     async initAuth() {
@@ -229,23 +229,6 @@ export const useAuthStore = defineStore('auth', {
     }
   }
 })
-
-async function clearLocalDb() {
-  const tables = [
-    'plants',
-    'locations',
-    'species',
-    'tags',
-    'movement_types',
-    'container_types',
-    'operations',
-    'movements',
-    'pending_photos',
-    'sync_queue'
-  ]
-
-  await Promise.all(tables.map((tableName) => db.table(tableName).clear()))
-}
 
 function roleToLabel(role) {
   const roleLabels = {
