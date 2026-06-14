@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 export const useNurseryStore = defineStore('nursery', {
   state: () => ({
     nursery: null,
+    nurseries: [],
     subscription: null,
     plans: [],
     nurseryError: '',
@@ -12,6 +13,7 @@ export const useNurseryStore = defineStore('nursery', {
   }),
   getters: {
     nurseryId: (state) => state.nursery?.id || null,
+    activeNurseryId: (state) => state.nursery?.id || null,
     planFeatures: (state) => state.subscription || {},
     plantLimit: (state) => state.subscription?.plant_limit ?? 300,
     userLimit: (state) => state.subscription?.user_limit ?? 2,
@@ -50,9 +52,37 @@ export const useNurseryStore = defineStore('nursery', {
       try {
         const response = await http.post('/nurseries', formData)
         this.nursery = response?.data || null
+        await this.fetchNurseries()
         return { ok: true }
       } catch (error) {
         this.nurseryError = error?.response?.data?.error || 'Ошибка создания питомника.'
+        return { ok: false, error: this.nurseryError }
+      } finally {
+        this.isLoading = false
+      }
+    },
+    async fetchNurseries() {
+      try {
+        const response = await http.get('/nurseries')
+        this.nurseries = response?.data || []
+      } catch (error) {
+        this.nurseryError = error?.response?.data?.error || 'Не удалось загрузить питомники.'
+        throw error
+      }
+    },
+    async switchNursery(nurseryId) {
+      if (!nurseryId || nurseryId === this.activeNurseryId) {
+        return { ok: true }
+      }
+
+      this.isLoading = true
+      this.nurseryError = ''
+
+      try {
+        await http.post(`/nurseries/${nurseryId}/switch`)
+        return { ok: true }
+      } catch (error) {
+        this.nurseryError = error?.response?.data?.error || 'Не удалось переключить питомник.'
         return { ok: false, error: this.nurseryError }
       } finally {
         this.isLoading = false
@@ -118,6 +148,7 @@ export const useNurseryStore = defineStore('nursery', {
       try {
         await Promise.all([
           this.fetchNursery(),
+          this.fetchNurseries(),
           this.fetchSubscription()
         ])
       } finally {
@@ -126,6 +157,7 @@ export const useNurseryStore = defineStore('nursery', {
     },
     resetState() {
       this.nursery = null
+      this.nurseries = []
       this.subscription = null
       this.plans = []
       this.isLoading = false

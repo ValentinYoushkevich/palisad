@@ -3,6 +3,7 @@
     <header class="layout__header">
       <h1 class="layout__title">Palisad</h1>
       <div class="layout__userPanel">
+        <NurserySwitcher />
         <SyncStatusBadge />
         <div class="layout__identity">
           <p class="layout__username">{{ authStore.userDisplayName }}</p>
@@ -50,6 +51,7 @@
 
 <script setup>
 import { useSyncManager } from '@/composables/useSyncManager'
+import NurserySwitcher from '@/layouts/components/NurserySwitcher.vue'
 import SyncStatusBadge from '@/layouts/components/SyncStatusBadge.vue'
 import { useAuthStore } from '@/stores/auth.store'
 import { useNurseryStore } from '@/stores/nursery.store'
@@ -76,7 +78,7 @@ const commonNavItems = computed(() => {
     {
       to: '/nursery/create',
       label: 'Создать питомник',
-      visible: authStore.isAuthenticated && !nurseryStore.nursery
+      visible: authStore.isAuthenticated
     },
     {
       to: '/locations',
