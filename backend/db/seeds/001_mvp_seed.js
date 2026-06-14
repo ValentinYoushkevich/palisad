@@ -11,6 +11,7 @@ export async function seed(knex) {
   await knex('plans').del();
   await knex('movement_types').del();
   await knex('container_types').del();
+  await knex('production_stages').del();
 
   await knex('plans').insert({
     name: 'Free',
@@ -47,6 +48,13 @@ export async function seed(knex) {
     { code: 'TRENCH', name: 'Прикоп', container_kind: 'trench', volume_liters: null, side_cm: null, is_system: true, is_active: true },
     { code: 'GREENHOUSE', name: 'Теплица', container_kind: 'greenhouse', volume_liters: null, side_cm: null, is_system: true, is_active: true },
     { code: 'COLD_STORAGE', name: 'Холодное хранение', container_kind: 'cold_room', volume_liters: null, side_cm: null, is_system: true, is_active: true },
+  ]);
+
+  await knex('production_stages').insert([
+    { name: 'Размножение', slug: 'propagation', sort_order: 1, is_system: true, is_active: true },
+    { name: 'Подвой (Liner)', slug: 'liner', sort_order: 2, is_system: true, is_active: true },
+    { name: 'Контейнер', slug: 'container', sort_order: 3, is_system: true, is_active: true },
+    { name: 'Поле', slug: 'field', sort_order: 4, is_system: true, is_active: true },
   ]);
 
   if (process.env.NODE_ENV !== 'production') {

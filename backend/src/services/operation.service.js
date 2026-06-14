@@ -3,6 +3,8 @@ import { CLOSED_STATUSES } from '@/constants/operation.constants.js';
 import * as operationRepo from '@/repositories/operation.repository.js';
 import * as photoRepo from '@/repositories/photo.repository.js';
 import * as plantRepo from '@/repositories/plant.repository.js';
+import * as stageHistoryRepo from '@/repositories/plantStageHistory.repository.js';
+import * as stageRepo from '@/repositories/productionStage.repository.js';
 import { AppError } from '@/utils/AppError.js';
 import { logActivity } from '@/utils/logActivity.js';
 import { checkFeature } from '@/utils/planGuards.js';
@@ -36,6 +38,23 @@ export async function createOperation({
       throw new AppError('Для transplant требуется newContainerId', 400);
     }
     await plantRepo.updateById(plant.id, { container_id: data.newContainerId });
+  }
+
+  if (data.type === 'change_stage') {
+    if (!data.newStageId) {
+      throw new AppError('Для change_stage требуется newStageId', 400);
+    }
+    const stage = await stageRepo.findById(nurseryId, data.newStageId);
+    if (!stage) {
+      throw new AppError('Стадия не найдена', 404);
+    }
+    await plantRepo.updateById(plant.id, { stage_id: data.newStageId });
+    await stageHistoryRepo.create({
+      plant_id: plant.id,
+      stage_id: data.newStageId,
+      changed_by: userId,
+      notes: data.notes ?? null,
+    });
   }
 
   const operation = await operationRepo.create({

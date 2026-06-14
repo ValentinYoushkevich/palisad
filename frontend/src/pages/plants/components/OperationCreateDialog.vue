@@ -30,6 +30,18 @@
       />
     </div>
 
+    <div v-if="isChangeStage" class="mb-3 flex flex-col gap-1.5">
+      <label for="newStageId">Новая стадия *</label>
+      <Select
+        id="newStageId"
+        v-model="form.newStageId"
+        :options="productionStagesStore.activeStages"
+        optionLabel="name"
+        optionValue="id"
+        class="w-full"
+      />
+    </div>
+
     <div class="mb-3 flex flex-col gap-1.5">
       <label for="operationNotes">Заметки</label>
       <Textarea id="operationNotes" v-model="form.notes" class="w-full" rows="3" />
@@ -49,6 +61,7 @@
 <script setup>
 import { useContainerTypesStore } from '@/stores/containerTypes.store'
 import { useOperationsStore } from '@/stores/operations.store'
+import { useProductionStagesStore } from '@/stores/productionStages.store'
 import { computed, ref } from 'vue'
 
 defineOptions({ name: 'OperationCreateDialog' })
@@ -67,12 +80,14 @@ const props = defineProps({
 const emit = defineEmits(['update:visible', 'created'])
 const operationsStore = useOperationsStore()
 const containerTypesStore = useContainerTypesStore()
+const productionStagesStore = useProductionStagesStore()
 
 const TYPE_OPTIONS = [
   { label: 'Прививка', value: 'grafting' },
   { label: 'Обрезка', value: 'pruning' },
   { label: 'Обработка СЗР', value: 'treatment' },
   { label: 'Пересадка', value: 'transplant' },
+  { label: 'Смена стадии', value: 'change_stage' },
   { label: 'Осмотр', value: 'inspection' },
   { label: 'Другое', value: 'other' }
 ]
@@ -80,10 +95,12 @@ const TYPE_OPTIONS = [
 const form = ref({
   type: 'inspection',
   notes: '',
-  newContainerId: null
+  newContainerId: null,
+  newStageId: null
 })
 
 const isTransplant = computed(() => form.value.type === 'transplant')
+const isChangeStage = computed(() => form.value.type === 'change_stage')
 
 function emitVisible(value) {
   emit('update:visible', value)
@@ -99,7 +116,8 @@ async function handleCreate() {
   form.value = {
     type: 'inspection',
     notes: '',
-    newContainerId: null
+    newContainerId: null,
+    newStageId: null
   }
   emit('created')
   emitVisible(false)

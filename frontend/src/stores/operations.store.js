@@ -79,6 +79,11 @@ export const useOperationsStore = defineStore('operations', {
             await plantsStore.updatePlant(plantId, { containerId: formData.newContainerId })
           }
 
+          // Стадию меняет бэкенд (plants.stage_id + история) — подтягиваем актуальную карточку.
+          if (formData.type === 'change_stage' && formData.newStageId) {
+            await plantsStore.refreshPlant(plantId)
+          }
+
           return { ok: true, data: created }
         }
 
@@ -97,6 +102,16 @@ export const useOperationsStore = defineStore('operations', {
 
         this.operationsByPlant[plantId].unshift(localOperation)
         await db.operations.put(localOperation)
+
+        // Офлайн: оптимистично отражаем смену стадии в локальной карточке растения.
+        if (formData.type === 'change_stage' && formData.newStageId) {
+          const localPlant = plantsStore.plants.find((item) => item.id === plantId)
+          if (localPlant) {
+            localPlant.stage_id = formData.newStageId
+            await db.plants.update(plantId, { stage_id: formData.newStageId })
+          }
+        }
+
         await addToQueue('create_operation', { plantId, ...formData })
         return { ok: true, data: localOperation }
       } catch (error) {

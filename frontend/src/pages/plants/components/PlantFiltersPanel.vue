@@ -43,6 +43,20 @@
         @change="emit('change')"
       />
     </div>
+    <div class="plantFilters__cell plantFilters__cell--select">
+      <label class="sr-only" for="plant-filter-stage">Стадия</label>
+      <Select
+        v-model="filters.stageId"
+        class="w-full"
+        inputId="plant-filter-stage"
+        :options="productionStagesStore.activeStages"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="Стадия"
+        showClear
+        @change="emit('change')"
+      />
+    </div>
     <InputText
       v-model="filters.numericCode"
       class="plantFilters__cell plantFilters__cell--input"
@@ -62,6 +76,7 @@
 <script setup>
 import { useContainerTypesStore } from '@/stores/containerTypes.store'
 import { usePlantsStore } from '@/stores/plants.store'
+import { useProductionStagesStore } from '@/stores/productionStages.store'
 import { useSpeciesStore } from '@/stores/species.store'
 import { computed } from 'vue'
 
@@ -71,6 +86,7 @@ const emit = defineEmits(['change'])
 const plantsStore = usePlantsStore()
 const speciesStore = useSpeciesStore()
 const containerTypesStore = useContainerTypesStore()
+const productionStagesStore = useProductionStagesStore()
 
 const STATUS_OPTIONS = [
   { label: 'В росте', value: 'growing' },

@@ -3,6 +3,7 @@ export const OPERATION_TYPES = [
   'pruning',
   'treatment',
   'transplant',
+  'change_stage',
   'inspection',
   'other',
 ];

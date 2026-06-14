@@ -15,6 +15,7 @@ export const usePlantsStore = defineStore('plants', {
       locationId: null,
       tagId: null,
       containerId: null,
+      stageId: null,
       search: '',
       numericCode: ''
     },
@@ -50,6 +51,10 @@ export const usePlantsStore = defineStore('plants', {
 
       if (filters.containerId) {
         result = result.filter((item) => item.container_id === filters.containerId)
+      }
+
+      if (filters.stageId) {
+        result = result.filter((item) => item.stage_id === filters.stageId)
       }
 
       if (filters.numericCode) {
@@ -299,6 +304,7 @@ export const usePlantsStore = defineStore('plants', {
         locationId: null,
         tagId: null,
         containerId: null,
+        stageId: null,
         search: '',
         numericCode: ''
       }

@@ -15,6 +15,11 @@ db.version(1).stores({
   sync_queue: '++id, type, status, timestamp'
 })
 
+// v2: справочник производственных стадий (этап 3 v2).
+db.version(2).stores({
+  production_stages: 'id, nursery_id, is_system, is_active'
+})
+
 export const dbTables = {
   plants: db.table('plants'),
   locations: db.table('locations'),
@@ -22,6 +27,7 @@ export const dbTables = {
   tags: db.table('tags'),
   movementTypes: db.table('movement_types'),
   containerTypes: db.table('container_types'),
+  productionStages: db.table('production_stages'),
   operations: db.table('operations'),
   movements: db.table('movements'),
   pendingPhotos: db.table('pending_photos'),
@@ -35,6 +41,7 @@ export const DOMAIN_TABLES = [
   'tags',
   'movement_types',
   'container_types',
+  'production_stages',
   'operations',
   'movements',
   'pending_photos',

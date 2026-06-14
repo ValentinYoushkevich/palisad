@@ -35,6 +35,13 @@ const SYSTEM_MOVEMENT_TYPES = [
   { name: 'Перемещение', slug: 'transfer', is_system: true, sets_status: null, is_active: true },
 ];
 
+const SYSTEM_PRODUCTION_STAGES = [
+  { name: 'Размножение', slug: 'propagation', sort_order: 1, is_system: true, is_active: true },
+  { name: 'Подвой (Liner)', slug: 'liner', sort_order: 2, is_system: true, is_active: true },
+  { name: 'Контейнер', slug: 'container', sort_order: 3, is_system: true, is_active: true },
+  { name: 'Поле', slug: 'field', sort_order: 4, is_system: true, is_active: true },
+];
+
 const SYSTEM_CONTAINER_TYPES = [
   { code: 'P9', name: 'Горшок P9 (9x9 см)', container_kind: 'pot', volume_liters: null, side_cm: 9, is_system: true, is_active: true },
   { code: 'C1', name: 'Контейнер C1 (1 л)', container_kind: 'pot', volume_liters: 1, side_cm: null, is_system: true, is_active: true },
@@ -79,9 +86,11 @@ export async function setup() {
     await db('plans').del();
     await db('movement_types').del();
     await db('container_types').del();
+    await db('production_stages').del();
     await db('plans').insert(FREE_PLAN);
     await db('movement_types').insert(SYSTEM_MOVEMENT_TYPES);
     await db('container_types').insert(SYSTEM_CONTAINER_TYPES);
+    await db('production_stages').insert(SYSTEM_PRODUCTION_STAGES);
   } finally {
     await db.destroy();
   }

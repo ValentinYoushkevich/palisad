@@ -7,7 +7,8 @@ function buildListQuery(nurseryId, filters = {}) {
     .leftJoin('nursery_species', 'plants.nursery_species_id', 'nursery_species.id')
     .leftJoin('species_catalog', 'nursery_species.species_catalog_id', 'species_catalog.id')
     .leftJoin('locations', 'plants.location_id', 'locations.id')
-    .leftJoin('container_types', 'plants.container_id', 'container_types.id');
+    .leftJoin('container_types', 'plants.container_id', 'container_types.id')
+    .leftJoin('production_stages', 'plants.stage_id', 'production_stages.id');
 
   if (filters.status) {
     query.where('plants.status', filters.status);
@@ -20,6 +21,9 @@ function buildListQuery(nurseryId, filters = {}) {
   }
   if (filters.containerId) {
     query.where('plants.container_id', filters.containerId);
+  }
+  if (filters.stageId) {
+    query.where('plants.stage_id', filters.stageId);
   }
   if (filters.numericCode) {
     query.where('plants.numeric_code', filters.numericCode);
@@ -52,7 +56,9 @@ export function findPage(nurseryId, filters = {}, { limit, offset } = {}) {
       'species_catalog.scientific_name',
       'nursery_species.display_name_ru',
       'locations.name as location_name',
-      'container_types.code as container_code'
+      'container_types.code as container_code',
+      'production_stages.name as stage_name',
+      'production_stages.slug as stage_slug'
     )
     .orderBy('plants.created_at', 'desc')
     .orderBy('plants.id', 'asc');

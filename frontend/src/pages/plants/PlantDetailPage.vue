@@ -25,6 +25,23 @@
       {{ operationsStore.operationsError }}
     </Message>
 
+    <div class="page-panel flex flex-col gap-2">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-semibold">Производственная стадия</h3>
+        <Tag v-if="currentStageName" :value="currentStageName" severity="info" />
+        <span v-else class="text-sm text-gray-500">Стадия не задана</span>
+      </div>
+      <ul v-if="stageHistory.length" class="flex flex-col gap-1 text-sm">
+        <li v-for="entry in stageHistory" :key="entry.id" class="flex items-center justify-between border-b border-slate-100 py-1">
+          <span>{{ entry.stage_name || '—' }}</span>
+          <span class="text-xs text-gray-500">
+            {{ formatDateTime(entry.created_at) }}<template v-if="entry.changed_by_name"> · {{ entry.changed_by_name }}</template>
+          </span>
+        </li>
+      </ul>
+      <p v-else class="text-sm text-gray-500">История смены стадий пуста.</p>
+    </div>
+
     <div class="page-panel">
       <OperationTimeline
         :operations="operationsStore.forPlant(plantId)"
@@ -68,6 +85,7 @@ import { useMovementsStore } from '@/stores/movements.store'
 import { useMovementTypesStore } from '@/stores/movementTypes.store'
 import { useOperationsStore } from '@/stores/operations.store'
 import { usePlantsStore } from '@/stores/plants.store'
+import { useProductionStagesStore } from '@/stores/productionStages.store'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -82,6 +100,7 @@ const movementsStore = useMovementsStore()
 const containerTypesStore = useContainerTypesStore()
 const movementTypesStore = useMovementTypesStore()
 const locationsStore = useLocationsStore()
+const productionStagesStore = useProductionStagesStore()
 const { isOnline } = useOnlineStatus()
 const createOperationVisible = ref(false)
 const createMovementVisible = ref(false)
@@ -90,11 +109,37 @@ const plantId = computed(() => String(route.params.id || ''))
 const shortPlantId = computed(() => plantId.value.slice(0, 8))
 const canDeleteMovement = computed(() => authStore.isOwner || authStore.isAgronomist)
 
+const plant = computed(() => plantsStore.plants.find((item) => item.id === plantId.value) || null)
+const stageHistory = computed(() => plant.value?.stageHistory || [])
+const currentStageName = computed(() => {
+  const stageId = plant.value?.stage_id
+  if (!stageId) {
+    return ''
+  }
+  const fromStore = productionStagesStore.stageById(stageId)
+  if (fromStore) {
+    return fromStore.name
+  }
+  return stageHistory.value.find((entry) => entry.stage_id === stageId)?.stage_name || ''
+})
+
+function formatDateTime(value) {
+  if (!value) {
+    return ''
+  }
+  try {
+    return new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return ''
+  }
+}
+
 onMounted(async () => {
   await Promise.all([
     containerTypesStore.fetchContainerTypes(),
     movementTypesStore.fetchMovementTypes(),
-    locationsStore.fetchLocations()
+    locationsStore.fetchLocations(),
+    productionStagesStore.fetchStages()
   ])
 
   if (isOnline.value) {

@@ -61,6 +61,12 @@
       <Column header="Локация">
         <template #body="{ data }">{{ data.location_name || '—' }}</template>
       </Column>
+      <Column header="Стадия">
+        <template #body="{ data }">
+          <Tag v-if="data.stage_name" :value="data.stage_name" severity="info" />
+          <span v-else>—</span>
+        </template>
+      </Column>
       <Column header="Статус">
         <template #body="{ data }">
           <Tag :value="statusLabel(data.status)" :severity="statusSeverity(data.status)" />
@@ -87,6 +93,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { useContainerTypesStore } from '@/stores/containerTypes.store'
 import { useLocationsStore } from '@/stores/locations.store'
 import { usePlantsStore } from '@/stores/plants.store'
+import { useProductionStagesStore } from '@/stores/productionStages.store'
 import { useSpeciesStore } from '@/stores/species.store'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -113,6 +120,7 @@ const authStore = useAuthStore()
 const speciesStore = useSpeciesStore()
 const locationsStore = useLocationsStore()
 const containerTypesStore = useContainerTypesStore()
+const productionStagesStore = useProductionStagesStore()
 const { isOnline } = useOnlineStatus()
 
 const createVisible = ref(false)
@@ -123,7 +131,8 @@ onMounted(async () => {
   await Promise.all([
     speciesStore.fetchSpecies(),
     locationsStore.fetchLocations(),
-    containerTypesStore.fetchContainerTypes()
+    containerTypesStore.fetchContainerTypes(),
+    productionStagesStore.fetchStages()
   ])
 
   if (isOnline.value) {

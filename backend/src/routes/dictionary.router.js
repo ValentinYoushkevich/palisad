@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { STRUCTURE_ROLES } from '@/constants/roles.constants.js';
 import * as dictionaryController from '@/controllers/dictionary.controller.js';
+import * as productionStageController from '@/controllers/productionStage.controller.js';
 import { requireAuth } from '@/middlewares/requireAuth.js';
 import { requireNurseryAccess } from '@/middlewares/requireNurseryAccess.js';
 import { requireRole } from '@/middlewares/requireRole.js';
@@ -9,10 +10,14 @@ import { validate } from '@/middlewares/validate.js';
 import {
   attachSpeciesByNameSchema,
   createContainerTypeSchema,
+  createLaborNormSchema,
   createMovementTypeSchema,
+  createProductionStageSchema,
   createTagSchema,
   updateContainerTypeSchema,
+  updateLaborNormSchema,
   updateMovementTypeSchema,
+  updateProductionStageSchema,
   updateSpeciesSchema,
   updateTagSchema,
 } from '@/utils/validators/dictionary.validators.js';
@@ -97,6 +102,44 @@ router.delete(
   '/container-types/:id',
   requireRole(...STRUCTURE_ROLES),
   dictionaryController.deleteContainerType
+);
+
+router.get('/production-stages', productionStageController.getStages);
+router.post(
+  '/production-stages',
+  requireRole(...STRUCTURE_ROLES),
+  validate(createProductionStageSchema),
+  productionStageController.createStage
+);
+router.patch(
+  '/production-stages/:id',
+  requireRole(...STRUCTURE_ROLES),
+  validate(updateProductionStageSchema),
+  productionStageController.updateStage
+);
+router.delete(
+  '/production-stages/:id',
+  requireRole(...STRUCTURE_ROLES),
+  productionStageController.deleteStage
+);
+
+router.get('/stage-labor-norms', productionStageController.getLaborNorms);
+router.post(
+  '/stage-labor-norms',
+  requireRole(...STRUCTURE_ROLES),
+  validate(createLaborNormSchema),
+  productionStageController.createLaborNorm
+);
+router.patch(
+  '/stage-labor-norms/:id',
+  requireRole(...STRUCTURE_ROLES),
+  validate(updateLaborNormSchema),
+  productionStageController.updateLaborNorm
+);
+router.delete(
+  '/stage-labor-norms/:id',
+  requireRole(...STRUCTURE_ROLES),
+  productionStageController.deleteLaborNorm
 );
 
 export default router;

@@ -75,6 +75,13 @@
           size="small"
           @click="openCreateContainerType"
         />
+        <Button
+          v-if="authStore.canManageStructure && activeSection === 'productionStages'"
+          icon="pi pi-plus"
+          label="Добавить стадию"
+          size="small"
+          @click="openCreateStage"
+        />
       </div>
 
       <DataTable
@@ -176,6 +183,27 @@
             </template>
           </Column>
         </template>
+
+        <template v-if="activeSection === 'productionStages'">
+          <Column field="sort_order" header="№" style="width: 70px" />
+          <Column field="name" header="Название" />
+          <Column field="slug" header="Slug" />
+          <Column header="Статус">
+            <template #body="{ data }">
+              <Tag :value="activeLabel(data.is_active)" :severity="activeSeverity(data.is_active)" />
+            </template>
+          </Column>
+          <Column header="Служебная">
+            <template #body="{ data }">
+              <Tag :value="systemLabel(data.is_system)" :severity="systemSeverity(data.is_system)" />
+            </template>
+          </Column>
+          <Column v-if="authStore.canManageStructure" header="Действия">
+            <template #body="{ data }">
+              <Button v-if="!data.is_system" icon="pi pi-pencil" text @click="openEditStage(data)" />
+            </template>
+          </Column>
+        </template>
       </DataTable>
     </div>
     <SpeciesSearchDialog v-model:visible="speciesDialogVisible" @created="handleSpeciesCreated" />
@@ -208,6 +236,15 @@
       :title="containerDialogTitle"
       @submit="handleSaveContainerType"
     />
+    <ProductionStageDialog
+      v-model="stageDialogVisible"
+      :errorMessage="productionStagesStore.stagesError"
+      :initialForm="stageInitialForm"
+      :loading="productionStagesStore.isLoading"
+      :saveLabel="stageSaveLabel"
+      :title="stageDialogTitle"
+      @submit="handleSaveStage"
+    />
   </section>
 </template>
 
@@ -230,11 +267,14 @@ import {
 } from '@/pages/catalog/catalog.config'
 import ContainerTypeDialog from '@/pages/catalog/components/ContainerTypeDialog.vue'
 import MovementTypeDialog from '@/pages/catalog/components/MovementTypeDialog.vue'
+import ProductionStageDialog from '@/pages/catalog/components/ProductionStageDialog.vue'
 import SpeciesSearchDialog from '@/pages/catalog/components/SpeciesSearchDialog.vue'
 import TagFormDialog from '@/pages/catalog/components/TagFormDialog.vue'
+import { useStageSection } from '@/pages/catalog/useStageSection'
 import { useAuthStore } from '@/stores/auth.store'
 import { useContainerTypesStore } from '@/stores/containerTypes.store'
 import { useMovementTypesStore } from '@/stores/movementTypes.store'
+import { useProductionStagesStore } from '@/stores/productionStages.store'
 import { useSpeciesStore } from '@/stores/species.store'
 import { useTagsStore } from '@/stores/tags.store'
 import { computed, onMounted, ref } from 'vue'
@@ -246,6 +286,7 @@ const speciesStore = useSpeciesStore()
 const tagsStore = useTagsStore()
 const movementTypesStore = useMovementTypesStore()
 const containerTypesStore = useContainerTypesStore()
+const productionStagesStore = useProductionStagesStore()
 
 const activeSection = ref(null)
 const speciesDialogVisible = ref(false)
@@ -263,13 +304,24 @@ const containerDialogVisible = ref(false)
 const containerEditingId = ref(null)
 const containerInitialForm = ref(defaultContainerForm())
 
+const {
+  visible: stageDialogVisible,
+  initialForm: stageInitialForm,
+  title: stageDialogTitle,
+  saveLabel: stageSaveLabel,
+  openCreate: openCreateStage,
+  openEdit: openEditStage,
+  handleSave: handleSaveStage
+} = useStageSection()
+
 const sectionTitle = computed(() => SECTION_TITLES[activeSection.value] || 'Справочник')
 const emptyStateText = computed(() => emptyTextBySection(activeSection.value))
 const sectionCountMap = computed(() => ({
   species: speciesStore.species.length,
   tags: tagsStore.tags.length,
   movementTypes: movementTypesStore.movementTypes.length,
-  containerTypes: containerTypesStore.containerTypes.length
+  containerTypes: containerTypesStore.containerTypes.length,
+  productionStages: productionStagesStore.stages.length
 }))
 const sectionCards = computed(() => SECTION_CARD_META.map((item) => ({ ...item, countLabel: String(sectionCountMap.value[item.key] ?? 0) })))
 
@@ -285,6 +337,9 @@ const sectionRows = computed(() => {
   }
   if (activeSection.value === 'containerTypes') {
     return containerTypesStore.containerTypes
+  }
+  if (activeSection.value === 'productionStages') {
+    return productionStagesStore.stages
   }
 
   return []
@@ -303,6 +358,9 @@ const isSectionLoading = computed(() => {
   if (activeSection.value === 'containerTypes') {
     return containerTypesStore.isLoading
   }
+  if (activeSection.value === 'productionStages') {
+    return productionStagesStore.isLoading
+  }
 
   return false
 })
@@ -319,7 +377,8 @@ onMounted(async () => {
     speciesStore.fetchSpecies(),
     tagsStore.fetchTags(),
     movementTypesStore.fetchMovementTypes(),
-    containerTypesStore.fetchContainerTypes()
+    containerTypesStore.fetchContainerTypes(),
+    productionStagesStore.fetchStages()
   ])
 })
 

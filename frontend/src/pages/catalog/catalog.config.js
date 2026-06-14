@@ -2,7 +2,8 @@ export const SECTION_TITLES = {
   species: 'Виды',
   tags: 'Теги',
   movementTypes: 'Типы движений',
-  containerTypes: 'Типы контейнеров'
+  containerTypes: 'Типы контейнеров',
+  productionStages: 'Производственные стадии'
 }
 
 export const STATUS_OPTIONS = [
@@ -52,6 +53,14 @@ export const SECTION_CARD_META = [
     description: 'Шаблоны контейнеров и параметры тары для учета.',
     iconClass: 'pi pi-box text-2xl text-white',
     headerGradient: 'linear-gradient(120deg, #64748b 0%, #334155 52%, #0f172a 100%)'
+  },
+  {
+    key: 'productionStages',
+    title: 'Производственные стадии',
+    subtitle: 'Цикл выращивания',
+    description: 'Стадии производства растений: размножение, контейнер, поле и кастомные.',
+    iconClass: 'pi pi-sitemap text-2xl text-white',
+    headerGradient: 'linear-gradient(120deg, #0891b2 0%, #0d9488 52%, #16a34a 100%)'
   }
 ]
 
@@ -79,6 +88,15 @@ export function defaultContainerForm() {
     container_kind: 'pot',
     volume_liters: null,
     side_cm: null,
+    is_active: true
+  }
+}
+
+export function defaultStageForm() {
+  return {
+    name: '',
+    slug: '',
+    sort_order: 0,
     is_active: true
   }
 }
@@ -136,6 +154,9 @@ export function emptyTextBySection(section) {
   }
   if (section === 'containerTypes') {
     return 'Типы контейнеров еще не добавлены.'
+  }
+  if (section === 'productionStages') {
+    return 'Стадии еще не добавлены.'
   }
   return 'Записи еще не добавлены.'
 }

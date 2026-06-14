@@ -1,6 +1,7 @@
 import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { ROLES } from '@/constants/roles.constants.js';
 import * as plantRepo from '@/repositories/plant.repository.js';
+import * as stageHistoryRepo from '@/repositories/plantStageHistory.repository.js';
 import { AppError } from '@/utils/AppError.js';
 import { logActivity } from '@/utils/logActivity.js';
 import { checkFeature, checkLimit } from '@/utils/planGuards.js';
@@ -22,8 +23,11 @@ export async function getPlantById(nurseryId, id) {
     throw new AppError('Растение не найдено', 404);
   }
 
-  const tags = await plantRepo.getTagsByPlant(id);
-  return { ...plant, tags };
+  const [tags, stageHistory] = await Promise.all([
+    plantRepo.getTagsByPlant(id),
+    stageHistoryRepo.findByPlant(id),
+  ]);
+  return { ...plant, tags, stageHistory };
 }
 
 export async function findByQr(nurseryId, qrCode) {
@@ -55,6 +59,7 @@ export async function createPlant(nurseryId, accountId, data, userId) {
     nursery_species_id: data.speciesId ?? null,
     location_id: data.locationId ?? null,
     container_id: data.containerId ?? null,
+    stage_id: data.stageId ?? null,
     variety: data.variety ?? null,
     planted_at: data.plantedAt ?? null,
     source: data.source ?? null,
@@ -84,6 +89,7 @@ export async function bulkCreate(nurseryId, accountId, template, count) {
       nursery_species_id: template.speciesId ?? null,
       location_id: template.locationId ?? null,
       container_id: template.containerId ?? null,
+      stage_id: template.stageId ?? null,
       variety: template.variety ?? null,
       planted_at: template.plantedAt ?? null,
       source: template.source ?? null,
@@ -102,6 +108,7 @@ export async function updatePlant(nurseryId, id, data, userId) {
     nursery_species_id: data.speciesId ?? null,
     location_id: data.locationId ?? null,
     container_id: data.containerId ?? null,
+    stage_id: data.stageId ?? null,
     variety: data.variety ?? null,
     planted_at: data.plantedAt ?? null,
     source: data.source ?? null,

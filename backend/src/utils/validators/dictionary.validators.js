@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { OPERATION_TYPES } from '@/constants/operation.constants.js';
+
 const statusSchema = z.enum(['growing', 'storage', 'sold', 'written_off']);
 const containerKindSchema = z.enum([
   'pot',
@@ -58,4 +60,28 @@ export const updateContainerTypeSchema = z.object({
   volume_liters: z.number().nonnegative().optional().nullable(),
   side_cm: z.number().nonnegative().optional().nullable(),
   is_active: z.boolean().optional(),
+});
+
+export const createProductionStageSchema = z.object({
+  name: z.string().min(1).max(120),
+  slug: z.string().min(1).max(120),
+  sort_order: z.number().int().min(0).optional(),
+});
+
+export const updateProductionStageSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  slug: z.string().min(1).max(120).optional(),
+  sort_order: z.number().int().min(0).optional(),
+  is_active: z.boolean().optional(),
+});
+
+export const createLaborNormSchema = z.object({
+  stage_id: z.string().uuid(),
+  operation_type: z.enum(OPERATION_TYPES),
+  norm_minutes: z.number().int().min(0),
+});
+
+export const updateLaborNormSchema = z.object({
+  operation_type: z.enum(OPERATION_TYPES).optional(),
+  norm_minutes: z.number().int().min(0).optional(),
 });
