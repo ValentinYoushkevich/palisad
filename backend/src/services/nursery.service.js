@@ -7,8 +7,26 @@ import * as subscriptionRepo from '@/repositories/subscription.repository.js';
 import * as userRepo from '@/repositories/user.repository.js';
 import { AppError } from '@/utils/AppError.js';
 
-export async function getMyNursery(accountId) {
-  const nursery = await nurseryRepo.findByAccountId(accountId);
+export async function getMyNursery(accountId, activeNurseryId) {
+  let nursery = activeNurseryId
+    ? await nurseryRepo.findByIdAndAccount(activeNurseryId, accountId)
+    : null;
+  if (!nursery) {
+    nursery = await nurseryRepo.findFirstByAccountId(accountId);
+  }
+  if (!nursery) {
+    throw new AppError('Питомник не найден', 404);
+  }
+
+  return nursery;
+}
+
+export function listNurseries(accountId) {
+  return nurseryRepo.findAllByAccountId(accountId);
+}
+
+export async function getNurseryById(accountId, nurseryId) {
+  const nursery = await nurseryRepo.findByIdAndAccount(nurseryId, accountId);
   if (!nursery) {
     throw new AppError('Питомник не найден', 404);
   }
@@ -17,11 +35,6 @@ export async function getMyNursery(accountId) {
 }
 
 export async function createNursery(accountId, data) {
-  const existing = await nurseryRepo.findByAccountId(accountId);
-  if (existing) {
-    throw new AppError('Питомник уже создан', 409);
-  }
-
   await checkNurseryLimit(accountId);
 
   const account = await accountRepo.findById(accountId);
@@ -44,8 +57,10 @@ export async function createNursery(accountId, data) {
   return nursery;
 }
 
-export async function updateNursery(accountId, data) {
-  const nursery = await nurseryRepo.findByAccountId(accountId);
+export async function updateNursery(accountId, nurseryId, data) {
+  const nursery = nurseryId
+    ? await nurseryRepo.findByIdAndAccount(nurseryId, accountId)
+    : null;
   if (!nursery) {
     throw new AppError('Питомник не найден', 404);
   }

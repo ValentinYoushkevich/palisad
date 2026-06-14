@@ -29,3 +29,18 @@ export function countByAccountId(accountId) {
     .count('id as count')
     .then((rows) => Number(rows[0].count));
 }
+
+export function findAllByAccountId(accountId) {
+  return db('nurseries').where({ account_id: accountId }).orderBy('created_at', 'asc');
+}
+
+export function findByIdAndAccount(id, accountId) {
+  return db('nurseries').where({ id, account_id: accountId }).first();
+}
+
+export function findFirstByAccountId(accountId) {
+  return db('nurseries')
+    .where({ account_id: accountId })
+    .orderBy('created_at', 'asc')
+    .first();
+}

@@ -9,6 +9,7 @@ import {
   REFRESH_TTL_MS,
 } from '@/constants/auth.constants.js';
 import * as accountRepo from '@/repositories/account.repository.js';
+import * as nurseryRepo from '@/repositories/nursery.repository.js';
 import * as subscriptionRepo from '@/repositories/subscription.repository.js';
 import * as userRepo from '@/repositories/user.repository.js';
 import { AppError } from '@/utils/AppError.js';
@@ -57,7 +58,7 @@ export async function login(email, password, res) {
     throw new AppError('Неверный email или пароль', 401);
   }
 
-  const user = await userRepo.findOwnerByAccountId(account.id);
+  const { user } = await resolveActiveContext(account.id);
   const payload = {
     accountId: account.id,
     userId: user?.id,
@@ -103,7 +104,7 @@ export async function refresh(req, res) {
     throw new AppError('Аккаунт не найден', 401);
   }
 
-  const user = await userRepo.findOwnerByAccountId(account.id);
+  const { user } = await resolveActiveContext(account.id);
   const payload = {
     accountId: account.id,
     userId: user?.id,
@@ -135,6 +136,44 @@ export async function changePassword(accountId, currentPassword, newPassword) {
   const newHash = await argon2.hash(newPassword);
   await accountRepo.updateById(accountId, { password_hash: newHash });
   await userRepo.clearMustChangePassword(accountId);
+}
+
+async function resolveActiveContext(accountId) {
+  const account = await accountRepo.findById(accountId);
+  let nursery = null;
+  if (account?.last_active_nursery_id) {
+    nursery = await nurseryRepo.findByIdAndAccount(account.last_active_nursery_id, accountId);
+  }
+  if (!nursery) {
+    nursery = await nurseryRepo.findFirstByAccountId(accountId);
+  }
+  const user = nursery
+    ? await userRepo.findOwnerByAccountAndNursery(accountId, nursery.id)
+    : null;
+  return { account, nursery, user };
+}
+
+export async function activateNursery(accountId, nurseryId, res) {
+  const nursery = await nurseryRepo.findByIdAndAccount(nurseryId, accountId);
+  if (!nursery) {
+    throw new AppError('Питомник не найден', 404);
+  }
+
+  const user = await userRepo.findOwnerByAccountAndNursery(accountId, nurseryId);
+  const account = await accountRepo.findById(accountId);
+
+  const accessToken = signAccess({
+    accountId,
+    userId: user?.id,
+    nurseryId: nursery.id,
+    role: user?.role,
+  });
+  const refreshToken = signRefresh({ accountId });
+  setTokenCookies(res, accessToken, refreshToken);
+
+  await accountRepo.updateById(accountId, { last_active_nursery_id: nursery.id });
+
+  return { user: mapAuthUser(user, account), nursery };
 }
 
 function setTokenCookies(res, accessToken, refreshToken) {

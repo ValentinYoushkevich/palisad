@@ -9,6 +9,16 @@ export function findOwnerByAccountId(accountId) {
     .first();
 }
 
+export function findOwnerByAccountAndNursery(accountId, nurseryId) {
+  return db('users')
+    .join('nurseries', 'users.nursery_id', 'nurseries.id')
+    .where('nurseries.account_id', accountId)
+    .where('users.nursery_id', nurseryId)
+    .where('users.role', 'owner')
+    .select('users.*')
+    .first();
+}
+
 export function clearMustChangePassword(accountId) {
   return db('users')
     .whereIn(
