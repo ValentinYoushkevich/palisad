@@ -6,7 +6,9 @@ import {
   db,
   loginCookie,
   register,
+  setFreePlan,
   STRONG_PASSWORD,
+  toCookieHeader,
   uniqueEmail,
 } from './helpers.js';
 
@@ -34,13 +36,72 @@ describe('M3 — Питомник', () => {
     expect(owner).toBeTruthy();
   });
 
-  it('повторное создание питомника → 409', async () => {
+  it('создание второго питомника → 201 и он становится активным', async () => {
     const ctx = await createOwnerWithNursery();
+    await setFreePlan({ nursery_limit: 5 });
+
     const res = await api()
       .post('/api/nurseries')
       .set('Cookie', ctx.cookie)
-      .send({ name: 'Second Nursery' });
-    expect(res.status).toBe(409);
+      .send({ name: 'Second Nursery', address: 'St 2' });
+    expect(res.status).toBe(201);
+
+    const cookie2 = toCookieHeader(res.headers['set-cookie']);
+    const my = await api().get('/api/nurseries/my').set('Cookie', cookie2);
+    expect(my.body.name).toBe('Second Nursery');
+  });
+
+  it('GET /nurseries возвращает все питомники аккаунта', async () => {
+    const ctx = await createOwnerWithNursery();
+    await setFreePlan({ nursery_limit: 5 });
+    await api().post('/api/nurseries').set('Cookie', ctx.cookie).send({ name: 'Second' });
+
+    const res = await api().get('/api/nurseries').set('Cookie', ctx.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBe(2);
+  });
+
+  it('switch переключает активный питомник', async () => {
+    const ctx = await createOwnerWithNursery();
+    await setFreePlan({ nursery_limit: 5 });
+    const created = await api()
+      .post('/api/nurseries')
+      .set('Cookie', ctx.cookie)
+      .send({ name: 'Second' });
+    const cookie2 = toCookieHeader(created.headers['set-cookie']);
+
+    const sw = await api()
+      .post(`/api/nurseries/${ctx.nurseryId}/switch`)
+      .set('Cookie', cookie2);
+    expect(sw.status).toBe(200);
+
+    const cookieBack = toCookieHeader(sw.headers['set-cookie']);
+    const my = await api().get('/api/nurseries/my').set('Cookie', cookieBack);
+    expect(my.body.id).toBe(ctx.nurseryId);
+  });
+
+  it('switch на чужой питомник → 404', async () => {
+    const a = await createOwnerWithNursery();
+    const b = await createOwnerWithNursery();
+    const res = await api()
+      .post(`/api/nurseries/${b.nurseryId}/switch`)
+      .set('Cookie', a.cookie);
+    expect(res.status).toBe(404);
+  });
+
+  it('доступ к ресурсам неактивного своего питомника без switch → 403', async () => {
+    const ctx = await createOwnerWithNursery();
+    await setFreePlan({ nursery_limit: 5 });
+    const created = await api()
+      .post('/api/nurseries')
+      .set('Cookie', ctx.cookie)
+      .send({ name: 'Second' });
+    const cookie2 = toCookieHeader(created.headers['set-cookie']); // активен второй
+
+    const res = await api()
+      .get(`/api/nurseries/${ctx.nurseryId}/plants`)
+      .set('Cookie', cookie2);
+    expect(res.status).toBe(403);
   });
 
   it('получение питомника → 200', async () => {
@@ -66,5 +127,38 @@ describe('M3 — Питомник', () => {
   it('без токена → 401', async () => {
     const res = await api().get('/api/nurseries/my');
     expect(res.status).toBe(401);
+  });
+});
+
+describe('M3 — Лимит питомников по плану', () => {
+  it('достигнут лимит питомников → 403', async () => {
+    await setFreePlan({ nursery_limit: 1 });
+    const ctx = await createOwnerWithNursery(); // уже 1 питомник
+    const res = await api()
+      .post('/api/nurseries')
+      .set('Cookie', ctx.cookie)
+      .send({ name: 'Second' });
+    expect(res.status).toBe(403);
+  });
+
+  it('nursery_limit = null → ограничения нет', async () => {
+    await setFreePlan({ nursery_limit: null });
+    const ctx = await createOwnerWithNursery();
+    const r2 = await api().post('/api/nurseries').set('Cookie', ctx.cookie).send({ name: 'N2' });
+    const r3 = await api().post('/api/nurseries').set('Cookie', ctx.cookie).send({ name: 'N3' });
+    expect(r2.status).toBe(201);
+    expect(r3.status).toBe(201);
+  });
+
+  it('лимит учитывает текущее число питомников', async () => {
+    await setFreePlan({ nursery_limit: 2 });
+    const ctx = await createOwnerWithNursery(); // 1
+    const r2 = await api().post('/api/nurseries').set('Cookie', ctx.cookie).send({ name: 'N2' });
+    expect(r2.status).toBe(201); // 2-й в пределах лимита
+    const r3 = await api()
+      .post('/api/nurseries')
+      .set('Cookie', toCookieHeader(r2.headers['set-cookie']))
+      .send({ name: 'N3' });
+    expect(r3.status).toBe(403); // 3-й сверх лимита
   });
 });

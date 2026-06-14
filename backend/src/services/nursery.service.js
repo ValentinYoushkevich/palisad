@@ -3,9 +3,9 @@ import argon2 from 'argon2';
 import { DEFAULT_OWNER_ROLE } from '@/constants/nursery.constants.js';
 import * as accountRepo from '@/repositories/account.repository.js';
 import * as nurseryRepo from '@/repositories/nursery.repository.js';
-import * as subscriptionRepo from '@/repositories/subscription.repository.js';
 import * as userRepo from '@/repositories/user.repository.js';
 import { AppError } from '@/utils/AppError.js';
+import { checkLimit } from '@/utils/planGuards.js';
 
 export async function getMyNursery(accountId, activeNurseryId) {
   let nursery = activeNurseryId
@@ -35,7 +35,8 @@ export async function getNurseryById(accountId, nurseryId) {
 }
 
 export async function createNursery(accountId, data) {
-  await checkNurseryLimit(accountId);
+  const count = await nurseryRepo.countByAccountId(accountId);
+  await checkLimit(accountId, 'nursery_limit', count);
 
   const account = await accountRepo.findById(accountId);
   if (!account) {
@@ -66,21 +67,4 @@ export async function updateNursery(accountId, nurseryId, data) {
   }
 
   return nurseryRepo.updateById(nursery.id, data);
-}
-
-async function checkNurseryLimit(accountId) {
-  const sub = await subscriptionRepo.getActiveWithPlan(accountId);
-  if (!sub) {
-    return;
-  }
-
-  const { nursery_limit: nurseryLimit } = sub;
-  if (nurseryLimit === null) {
-    return;
-  }
-
-  const count = await nurseryRepo.countByAccountId(accountId);
-  if (count >= nurseryLimit) {
-    throw new AppError('Достигнут лимит питомников по текущему плану', 403);
-  }
 }
