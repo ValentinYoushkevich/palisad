@@ -50,8 +50,15 @@ export const useOperationsStore = defineStore('operations', {
     async createOperation(plantId, formData) {
       const { isOnline } = useOnlineStatus()
       const plantsStore = usePlantsStore()
+      const nurseryStore = useNurseryStore()
       this.operationsError = ''
       this.isLoading = true
+
+      // Идемпотентный ключ фиксируется на всё время жизни этой записи: и онлайн-POST, и
+      // повторная доставка из офлайн-очереди уходят с одним clientRequestId, поэтому
+      // потерянный ответ при живом сервере не создаёт дубль (F2, дедуп на бэкенде).
+      const clientRequestId = crypto.randomUUID()
+      const ctx = { plantId, nurseryId: nurseryStore.nurseryId, formData, clientRequestId }
 
       try {
         const plant = plantsStore.plants.find((item) => item.id === plantId)
@@ -62,57 +69,11 @@ export const useOperationsStore = defineStore('operations', {
         }
 
         if (isOnline.value) {
-          const nurseryStore = useNurseryStore()
-          const response = await http.post(`/nurseries/${nurseryStore.nurseryId}/plants/${plantId}/operations`, formData)
-          const created = response?.data || null
-
-          if (!this.operationsByPlant[plantId]) {
-            this.operationsByPlant[plantId] = []
-          }
-
-          if (created) {
-            this.operationsByPlant[plantId].unshift(created)
-            await db.operations.put(created)
-          }
-
-          if (formData.type === 'transplant' && formData.newContainerId) {
-            await plantsStore.updatePlant(plantId, { containerId: formData.newContainerId })
-          }
-
-          // Стадию меняет бэкенд (plants.stage_id + история) — подтягиваем актуальную карточку.
-          if (formData.type === 'change_stage' && formData.newStageId) {
-            await plantsStore.refreshPlant(plantId)
-          }
-
+          const created = await runOnlineCreateOperation(this, plantsStore, ctx)
           return { ok: true, data: created }
         }
 
-        const localOperation = {
-          id: `local_${Date.now()}`,
-          plant_id: plantId,
-          type: formData.type,
-          notes: formData.notes,
-          created_at: new Date().toISOString(),
-          _pending: true
-        }
-
-        if (!this.operationsByPlant[plantId]) {
-          this.operationsByPlant[plantId] = []
-        }
-
-        this.operationsByPlant[plantId].unshift(localOperation)
-        await db.operations.put(localOperation)
-
-        // Офлайн: оптимистично отражаем смену стадии в локальной карточке растения.
-        if (formData.type === 'change_stage' && formData.newStageId) {
-          const localPlant = plantsStore.plants.find((item) => item.id === plantId)
-          if (localPlant) {
-            localPlant.stage_id = formData.newStageId
-            await db.plants.update(plantId, { stage_id: formData.newStageId })
-          }
-        }
-
-        await addToQueue('create_operation', { plantId, ...formData })
+        const localOperation = await enqueueLocalOperation(this, plantsStore, ctx)
         return { ok: true, data: localOperation }
       } catch (error) {
         this.operationsError = error?.response?.data?.error || 'Не удалось создать операцию.'
@@ -139,12 +100,13 @@ export const useOperationsStore = defineStore('operations', {
           return { ok: true }
         }
 
+        const nurseryStore = useNurseryStore()
         const local = this.operationsByPlant[plantId]?.find((item) => item.id === id)
         if (local) {
           Object.assign(local, formData, { _pending: true })
           await db.operations.put(local)
         }
-        await addToQueue('update_operation', { id, plantId, ...formData })
+        await addToQueue('update_operation', { id, plantId, nurseryId: nurseryStore.nurseryId, ...formData })
         return { ok: true }
       } catch (error) {
         this.operationsError = error?.response?.data?.error || 'Не удалось обновить операцию.'
@@ -168,9 +130,10 @@ export const useOperationsStore = defineStore('operations', {
           return { ok: true }
         }
 
+        const nurseryStore = useNurseryStore()
         removeFromMap(this.operationsByPlant, plantId, id)
         await db.operations.update(id, { deleted_at: new Date().toISOString() })
-        await addToQueue('delete_operation', { id, plantId })
+        await addToQueue('delete_operation', { id, plantId, nurseryId: nurseryStore.nurseryId })
         return { ok: true }
       } catch (error) {
         this.operationsError = error?.response?.data?.error || 'Не удалось удалить операцию.'
@@ -194,8 +157,9 @@ export const useOperationsStore = defineStore('operations', {
           return { ok: true, data: response?.data || null }
         }
 
+        const nurseryStore = useNurseryStore()
         const localId = await savePhoto(operationId, file)
-        await addToQueue('attach_photo', { operationId, plantId, localId })
+        await addToQueue('attach_photo', { operationId, plantId, nurseryId: nurseryStore.nurseryId, localId })
         return { ok: true }
       } catch (error) {
         this.operationsError = error?.response?.data?.error || 'Не удалось прикрепить фото.'
@@ -236,6 +200,73 @@ export const useOperationsStore = defineStore('operations', {
     }
   }
 })
+
+async function runOnlineCreateOperation(store, plantsStore, { plantId, nurseryId, formData, clientRequestId }) {
+  const response = await http.post(
+    `/nurseries/${nurseryId}/plants/${plantId}/operations`,
+    { ...formData, clientRequestId }
+  )
+  const created = response?.data || null
+
+  if (!store.operationsByPlant[plantId]) {
+    store.operationsByPlant[plantId] = []
+  }
+
+  if (created) {
+    store.operationsByPlant[plantId].unshift(created)
+    await db.operations.put(created)
+  }
+
+  if (formData.type === 'transplant' && formData.newContainerId) {
+    await plantsStore.updatePlant(plantId, { containerId: formData.newContainerId })
+  }
+
+  // Стадию меняет бэкенд (plants.stage_id + история) — подтягиваем актуальную карточку.
+  if (formData.type === 'change_stage' && formData.newStageId) {
+    await plantsStore.refreshPlant(plantId)
+  }
+
+  return created
+}
+
+async function enqueueLocalOperation(store, plantsStore, { plantId, nurseryId, formData, clientRequestId }) {
+  const localId = `local_${Date.now()}`
+  const localOperation = {
+    id: localId,
+    plant_id: plantId,
+    type: formData.type,
+    notes: formData.notes,
+    created_at: new Date().toISOString(),
+    _pending: true
+  }
+
+  if (!store.operationsByPlant[plantId]) {
+    store.operationsByPlant[plantId] = []
+  }
+
+  store.operationsByPlant[plantId].unshift(localOperation)
+  await db.operations.put(localOperation)
+
+  // Офлайн: оптимистично отражаем смену стадии в локальной карточке растения.
+  if (formData.type === 'change_stage' && formData.newStageId) {
+    const localPlant = plantsStore.plants.find((item) => item.id === plantId)
+    if (localPlant) {
+      localPlant.stage_id = formData.newStageId
+      await db.plants.update(plantId, { stage_id: formData.newStageId })
+    }
+  }
+
+  // nurseryId фиксируется при постановке в очередь (F7), localId — для замены на серверный
+  // id после синка (F8), clientRequestId — для идемпотентности повторной доставки (F2).
+  await addToQueue('create_operation', {
+    plantId,
+    nurseryId,
+    localId,
+    clientRequestId,
+    ...formData
+  })
+  return localOperation
+}
 
 function updateInMap(map, plantId, updated) {
   const list = map[plantId]

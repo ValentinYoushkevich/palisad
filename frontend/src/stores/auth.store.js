@@ -1,7 +1,7 @@
 import { clearDomainTables } from '@/db/indexedDb'
 import http from '@/services/http'
 import { useNotificationsStore } from '@/stores/notifications.store'
-import { useNurseryStore } from '@/stores/nursery.store'
+import { clearCachedNurseryContext, useNurseryStore } from '@/stores/nursery.store'
 import { defineStore } from 'pinia'
 
 const ACCESS_TOKEN_KEY = 'accessToken'
@@ -185,10 +185,15 @@ export const useAuthStore = defineStore('auth', {
 
         this.clearSession()
       } catch (error) {
-        if (import.meta.env.DEV) {
-          console.warn('initAuth failed', error)
+        const status = error?.response?.status
+        // Только явный отказ авторизации (401) сбрасывает сессию. Сетевая/офлайн-ошибка
+        // рефреша НЕ должна разлогинивать — иначе офлайн-старт с валидной сессией из
+        // localStorage выбрасывает на /login (F4).
+        if (status === 401) {
+          this.clearSession()
+        } else if (import.meta.env.DEV) {
+          console.warn('initAuth network error, keeping cached session', error)
         }
-        this.clearSession()
       } finally {
         this.isAuthInitialized = true
       }
@@ -227,6 +232,9 @@ export const useAuthStore = defineStore('auth', {
     clearSession() {
       this.clearTokens()
       this.setUser(null)
+      // Чистим офлайн-кэш контекста питомника, чтобы он не протёк на следующего
+      // пользователя того же браузера при истечении сессии (не только при явном logout).
+      clearCachedNurseryContext()
       // Session has been checked and is empty; do not re-run refresh on every navigation.
       this.isAuthInitialized = true
     }

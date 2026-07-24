@@ -23,16 +23,11 @@ export async function createOperation({
   data,
 }) {
   await checkFeature(accountId, 'feature_operations');
+  const plant = await requireOpenPlant(nurseryId, plantId);
 
-  const plant = await plantRepo.findByNurseryAndId(nurseryId, plantId);
-  if (!plant) {
-    throw new AppError('Растение не найдено', 404);
-  }
-  if (CLOSED_STATUSES.includes(plant.status)) {
-    throw new AppError(
-      'Нельзя добавлять операции к проданному или списанному растению',
-      400
-    );
+  const duplicate = await findDuplicateOperation(plant.id, data.clientRequestId);
+  if (duplicate) {
+    return duplicate;
   }
 
   // Побочные эффекты (смена контейнера/стадии + история) и вставка самой операции —
@@ -41,7 +36,13 @@ export async function createOperation({
   const operation = await db.transaction(async (trx) => {
     await applyOperationSideEffects(trx, { nurseryId, plantId: plant.id, userId, data });
     return operationRepo.create(
-      { plant_id: plantId, user_id: userId, type: data.type, notes: data.notes ?? null },
+      {
+        plant_id: plantId,
+        user_id: userId,
+        type: data.type,
+        notes: data.notes ?? null,
+        client_request_id: data.clientRequestId ?? null,
+      },
       trx
     );
   });
@@ -150,6 +151,32 @@ async function applyOperationSideEffects(trx, { nurseryId, plantId, userId, data
       trx
     );
   }
+}
+
+// Растение принадлежит питомнику и открыто (не продано/списано) — предусловие операции.
+async function requireOpenPlant(nurseryId, plantId) {
+  const plant = await plantRepo.findByNurseryAndId(nurseryId, plantId);
+  if (!plant) {
+    throw new AppError('Растение не найдено', 404);
+  }
+  if (CLOSED_STATUSES.includes(plant.status)) {
+    throw new AppError(
+      'Нельзя добавлять операции к проданному или списанному растению',
+      400
+    );
+  }
+
+  return plant;
+}
+
+// Идемпотентность повторной доставки офлайн-очереди (F2): при том же clientRequestId
+// возвращаем уже созданную операцию — не дублируем и не применяем побочные эффекты заново.
+function findDuplicateOperation(plantId, clientRequestId) {
+  if (!clientRequestId) {
+    return null;
+  }
+
+  return operationRepo.findByClientRequestId(plantId, clientRequestId);
 }
 
 async function requireOperation(plantId, id) {

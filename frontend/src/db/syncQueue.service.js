@@ -65,3 +65,41 @@ export async function retryFailed() {
       retries: 0
     })
 }
+
+// После успешной синхронизации create_* заменяет локальный (local_...) id на серверный:
+// обновляет доменную таблицу (operations/movements) и переписывает ссылки на этот id в
+// остальных ещё не отправленных элементах очереди (update/delete/attach_photo), чтобы они
+// ушли с реальным id. Без этого офлайн-запись дублируется при следующем просмотре, а
+// PATCH/DELETE по local_-id гарантированно падает 404 (F8).
+export async function reconcileLocalId(table, localId, serverRecord) {
+  if (!localId || !serverRecord?.id || localId === serverRecord.id) {
+    return
+  }
+
+  await db.table(table).delete(localId)
+  await db.table(table).put(serverRecord)
+
+  const items = await db.table('sync_queue')
+    .where('status')
+    .anyOf('pending', 'failed')
+    .toArray()
+
+  for (const item of items) {
+    const payload = item.payload || {}
+    let changed = false
+
+    if (payload.id === localId) {
+      payload.id = serverRecord.id
+      changed = true
+    }
+
+    if (payload.operationId === localId) {
+      payload.operationId = serverRecord.id
+      changed = true
+    }
+
+    if (changed) {
+      await db.table('sync_queue').update(item.id, { payload })
+    }
+  }
+}

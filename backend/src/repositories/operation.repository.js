@@ -14,6 +14,15 @@ export function findByPlantAndId(plantId, id) {
     .first();
 }
 
+// Идемпотентность повторной доставки офлайн-очереди (F2): ищем ранее созданную
+// операцию по client_request_id. Дедуп по всем строкам (без whereNull deleted_at) —
+// повторный запрос не должен воскрешать/дублировать даже удалённую запись.
+export function findByClientRequestId(plantId, clientRequestId, executor = db) {
+  return executor('operations')
+    .where({ plant_id: plantId, client_request_id: clientRequestId })
+    .first();
+}
+
 export function create(data, executor = db) {
   return executor('operations')
     .insert(data)

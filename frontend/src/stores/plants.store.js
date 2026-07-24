@@ -1,5 +1,5 @@
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
-import { upsertMany } from '@/db/dbUtils'
+import { clearTable, upsertMany } from '@/db/dbUtils'
 import db from '@/db/indexedDb'
 import http from '@/services/http'
 import { useNurseryStore } from '@/stores/nursery.store'
@@ -95,6 +95,14 @@ export const usePlantsStore = defineStore('plants', {
 
         this.plants = list
         this.pagination.total = payload.total || 0
+
+        // Server wins: на базовой загрузке (первая страница без фильтров) полностью
+        // заменяем локальный кэш, а не just bulkPut — иначе удалённые на сервере растения
+        // жили бы в IndexedDB вечно и «воскресали» офлайн (F9). Растения офлайн не
+        // создаются, поэтому clearTable не теряет несинхронизированных записей.
+        if (this.pagination.page === 1 && !hasActiveFilters(this.activeFilters)) {
+          await clearTable('plants')
+        }
         await upsertMany('plants', list)
         return { ok: true }
       } catch (error) {
@@ -189,6 +197,9 @@ export const usePlantsStore = defineStore('plants', {
       try {
         await http.delete(`/nurseries/${nurseryStore.nurseryId}/plants/${id}`)
         this.plants = this.plants.filter((item) => item.id !== id)
+        // Помечаем удаление и в кэше — иначе loadFromLocal показал бы «воскресшее»
+        // растение офлайн (F9). loadFromLocal фильтрует по deleted_at.
+        await db.plants.update(id, { deleted_at: new Date().toISOString() })
         return { ok: true }
       } catch (error) {
         this.plantsError = error?.response?.data?.error || 'Не удалось удалить растение.'
@@ -209,6 +220,9 @@ export const usePlantsStore = defineStore('plants', {
 
         if (restored) {
           this.plants.unshift(restored)
+          // Возвращаем растение и в кэш (deleted_at сброшен сервером), иначе офлайн оно
+          // осталось бы помеченным удалённым (F9).
+          await upsertMany('plants', [restored])
         }
 
         return { ok: true, data: restored }
@@ -315,6 +329,19 @@ export const usePlantsStore = defineStore('plants', {
     }
   }
 })
+
+function hasActiveFilters(filters) {
+  return Boolean(
+    filters.status ||
+    filters.speciesId ||
+    filters.locationId ||
+    filters.tagId ||
+    filters.containerId ||
+    filters.stageId ||
+    filters.search ||
+    filters.numericCode
+  )
+}
 
 function updateInList(list, updated) {
   if (!updated) {

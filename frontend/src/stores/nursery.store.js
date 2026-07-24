@@ -1,6 +1,29 @@
 import http from '@/services/http'
 import { defineStore } from 'pinia'
 
+// Ключ офлайн-кэша активного контекста питомника (nursery + список + подписка).
+// Экспортируется, чтобы auth.store мог чистить его при сбросе сессии (защита от утечки
+// контекста между аккаунтами на одном браузере).
+export const NURSERY_CONTEXT_KEY = 'nurseryContext'
+
+function readCachedContext() {
+  const raw = localStorage.getItem(NURSERY_CONTEXT_KEY)
+  if (!raw) {
+    return null
+  }
+
+  try {
+    return JSON.parse(raw)
+  } catch {
+    localStorage.removeItem(NURSERY_CONTEXT_KEY)
+    return null
+  }
+}
+
+export function clearCachedNurseryContext() {
+  localStorage.removeItem(NURSERY_CONTEXT_KEY)
+}
+
 export const useNurseryStore = defineStore('nursery', {
   state: () => ({
     nursery: null,
@@ -151,8 +174,45 @@ export const useNurseryStore = defineStore('nursery', {
           this.fetchNurseries(),
           this.fetchSubscription()
         ])
+        // Кэшируем актуальный контекст для офлайн-старта (F4).
+        this.persistContext()
+      } catch (error) {
+        // Офлайн/сетевой сбой: раньше исключение вылетало из router.beforeEach (пустой
+        // экран), а на повторной навигации nursery === null давал ложный редирект на
+        // /nursery/create. Поднимаем последний сохранённый контекст из localStorage (F4).
+        this.hydrateFromCache()
+        if (import.meta.env.DEV) {
+          console.warn('initNurseryContext failed, fell back to cached context', error)
+        }
       } finally {
         this.isInitialized = true
+      }
+    },
+    persistContext() {
+      try {
+        localStorage.setItem(NURSERY_CONTEXT_KEY, JSON.stringify({
+          nursery: this.nursery,
+          nurseries: this.nurseries,
+          subscription: this.subscription
+        }))
+      } catch {
+        // localStorage недоступен/переполнен — не критично для работы онлайн.
+      }
+    },
+    hydrateFromCache() {
+      const cached = readCachedContext()
+      if (!cached) {
+        return
+      }
+
+      if (!this.nursery) {
+        this.nursery = cached.nursery ?? null
+      }
+      if (!this.nurseries?.length) {
+        this.nurseries = cached.nurseries ?? []
+      }
+      if (!this.subscription) {
+        this.subscription = cached.subscription ?? null
       }
     },
     resetState() {
@@ -162,6 +222,7 @@ export const useNurseryStore = defineStore('nursery', {
       this.plans = []
       this.isLoading = false
       this.isInitialized = false
+      clearCachedNurseryContext()
     }
   }
 })

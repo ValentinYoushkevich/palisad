@@ -1,61 +1,72 @@
-import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { getPendingPhotos, markPhotoDone, markPhotoFailed } from '@/db/pendingPhotos.service'
-import { getById, getFailedCount, getPending, markDone, markFailed } from '@/db/syncQueue.service'
+import { getById, getFailedCount, getPending, markDone, markFailed, reconcileLocalId } from '@/db/syncQueue.service'
 import http from '@/services/http'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { useToast } from 'primevue/usetoast'
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 
 export const syncStatus = ref('idle')
 export const pendingCount = ref(0)
 export const failedCount = ref(0)
 
-export function useSyncManager() {
-  const { isOnline } = useOnlineStatus()
-  const toast = useToast()
+// Мьютекс модульный и СИНХРОННЫЙ: выставляется до первого await, поэтому три инстанса
+// useSyncManager (AppLayout, SyncStatusBadge, useNurserySwitch) и повторный вызов на
+// событии online не прогоняют одну очередь параллельно и не шлют дубли на сервер (F1).
+let isProcessing = false
+let onlineListenerBound = false
 
-  watch(isOnline, (online) => {
-    if (online) {
-      processQueue()
-    }
-  })
+async function processQueue(toast) {
+  if (isProcessing) {
+    return
+  }
 
-  async function processQueue() {
-    if (syncStatus.value === 'syncing') {
-      return
-    }
+  isProcessing = true
+  syncStatus.value = 'syncing'
 
+  try {
     const items = await getPending()
-    if (!items.length) {
-      await updateCounts()
-      return
-    }
-
-    syncStatus.value = 'syncing'
     pendingCount.value = items.length
 
     const nonPhotos = items.filter((item) => item.type !== 'attach_photo')
     const photos = items.filter((item) => item.type === 'attach_photo')
 
-    for (const item of nonPhotos) {
-      await processItem(item, toast)
+    // Элементы перечитываются из БД перед отправкой: предыдущий в этом же прогоне create_*
+    // мог заменить local_ id на серверный в их payload (F8), а снапшот из getPending —
+    // устаревший.
+    for (const queued of nonPhotos) {
+      const item = await getById(queued.id)
+      if (item) {
+        await processItem(item, toast)
+      }
     }
 
-    for (const item of photos) {
-      await processPhotoItem(item)
+    for (const queued of photos) {
+      const item = await getById(queued.id)
+      if (item) {
+        await processPhotoItem(item)
+      }
     }
-
-    syncStatus.value = 'idle'
+  } finally {
+    isProcessing = false
     await updateCounts()
   }
+}
 
-  async function forceSync() {
-    await processQueue()
+export function useSyncManager() {
+  const toast = useToast()
+
+  // Один слушатель online на весь модуль, а не по одному на каждый инстанс composable:
+  // иначе на reconnect processQueue вызывался бы столько раз, сколько живых инстансов (F1).
+  if (!onlineListenerBound && typeof window !== 'undefined') {
+    onlineListenerBound = true
+    window.addEventListener('online', () => {
+      processQueue(toast)
+    })
   }
 
   return {
-    processQueue,
-    forceSync,
+    processQueue: () => processQueue(toast),
+    forceSync: () => processQueue(toast),
     syncStatus,
     pendingCount,
     failedCount
@@ -63,25 +74,35 @@ export function useSyncManager() {
 }
 
 async function processItem(item, toast) {
-  const nurseryStore = useNurseryStore()
-  const nurseryId = nurseryStore.nurseryId
   const { type, payload } = item
+  // nurseryId берётся из payload (зафиксирован при постановке в очередь), а не из активного
+  // стора: иначе после переключения питомника очередь ушла бы в чужой питомник (F7).
+  const nurseryId = payload.nurseryId || useNurseryStore().nurseryId
 
   try {
     if (type === 'create_operation') {
-      await http.post(`/nurseries/${nurseryId}/plants/${payload.plantId}/operations`, payload)
+      const response = await http.post(`/nurseries/${nurseryId}/plants/${payload.plantId}/operations`, payload)
+      await reconcileLocalId('operations', payload.localId, response?.data)
     } else if (type === 'update_operation') {
       await http.patch(`/nurseries/${nurseryId}/plants/${payload.plantId}/operations/${payload.id}`, payload)
     } else if (type === 'delete_operation') {
       await http.delete(`/nurseries/${nurseryId}/plants/${payload.plantId}/operations/${payload.id}`)
     } else if (type === 'create_movement') {
-      await http.post(`/nurseries/${nurseryId}/plants/${payload.plantId}/movements`, payload)
+      const response = await http.post(`/nurseries/${nurseryId}/plants/${payload.plantId}/movements`, payload)
+      await reconcileLocalId('movements', payload.localId, response?.data)
     } else if (type === 'delete_movement') {
       await http.delete(`/nurseries/${nurseryId}/plants/${payload.plantId}/movements/${payload.id}`)
     }
 
     await markDone(item.id)
   } catch (error) {
+    // Идемпотентное удаление: если записи на сервере уже нет (404), повторную доставку
+    // delete_* считаем успехом, а не гоняем в ретраи до статуса failed (F2/F8).
+    if (isAlreadyDeleted(type, error)) {
+      await markDone(item.id)
+      return
+    }
+
     if (import.meta.env.DEV) {
       console.warn('Sync item failed', error)
     }
@@ -100,10 +121,13 @@ async function processItem(item, toast) {
   }
 }
 
+function isAlreadyDeleted(type, error) {
+  return (type === 'delete_operation' || type === 'delete_movement') && error?.response?.status === 404
+}
+
 async function processPhotoItem(item) {
-  const nurseryStore = useNurseryStore()
-  const nurseryId = nurseryStore.nurseryId
   const { payload } = item
+  const nurseryId = payload.nurseryId || useNurseryStore().nurseryId
 
   try {
     const pendingPhotos = await getPendingPhotos()

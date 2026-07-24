@@ -49,8 +49,13 @@ export const useMovementsStore = defineStore('movements', {
     async createMovement(plantId, formData) {
       const { isOnline } = useOnlineStatus()
       const plantsStore = usePlantsStore()
+      const nurseryStore = useNurseryStore()
       this.movementsError = ''
       this.isLoading = true
+
+      // Один идемпотентный ключ на онлайн-POST и на повторную доставку из очереди (F2).
+      const clientRequestId = crypto.randomUUID()
+      const ctx = { plantId, nurseryId: nurseryStore.nurseryId, formData, clientRequestId }
 
       try {
         const plant = plantsStore.plants.find((item) => item.id === plantId)
@@ -61,42 +66,11 @@ export const useMovementsStore = defineStore('movements', {
         }
 
         if (isOnline.value) {
-          const nurseryStore = useNurseryStore()
-          const response = await http.post(`/nurseries/${nurseryStore.nurseryId}/plants/${plantId}/movements`, formData)
-          const created = response?.data || null
-
-          if (!this.movementsByPlant[plantId]) {
-            this.movementsByPlant[plantId] = []
-          }
-
-          if (created) {
-            this.movementsByPlant[plantId].unshift(created)
-            await db.movements.put(created)
-            await applyMovementToPlant(plantsStore, plantId, created)
-          }
-
+          const created = await runOnlineCreateMovement(this, plantsStore, ctx)
           return { ok: true, data: created }
         }
 
-        const localMovement = {
-          id: `local_${Date.now()}`,
-          plant_id: plantId,
-          type_id: formData.typeId,
-          from_location_id: formData.fromLocationId ?? null,
-          to_location_id: formData.toLocationId ?? null,
-          quantity: formData.quantity ?? 1,
-          notes: formData.notes,
-          created_at: new Date().toISOString(),
-          _pending: true
-        }
-
-        if (!this.movementsByPlant[plantId]) {
-          this.movementsByPlant[plantId] = []
-        }
-
-        this.movementsByPlant[plantId].unshift(localMovement)
-        await db.movements.put(localMovement)
-        await addToQueue('create_movement', { plantId, ...formData })
+        const localMovement = await enqueueLocalMovement(this, ctx)
         return { ok: true, data: localMovement }
       } catch (error) {
         this.movementsError = error?.response?.data?.error || 'Не удалось создать движение.'
@@ -133,6 +107,59 @@ export const useMovementsStore = defineStore('movements', {
     }
   }
 })
+
+async function runOnlineCreateMovement(store, plantsStore, { plantId, nurseryId, formData, clientRequestId }) {
+  const response = await http.post(
+    `/nurseries/${nurseryId}/plants/${plantId}/movements`,
+    { ...formData, clientRequestId }
+  )
+  const created = response?.data || null
+
+  if (!store.movementsByPlant[plantId]) {
+    store.movementsByPlant[plantId] = []
+  }
+
+  if (created) {
+    store.movementsByPlant[plantId].unshift(created)
+    await db.movements.put(created)
+    await applyMovementToPlant(plantsStore, plantId, created)
+  }
+
+  return created
+}
+
+async function enqueueLocalMovement(store, { plantId, nurseryId, formData, clientRequestId }) {
+  const localId = `local_${Date.now()}`
+  const localMovement = {
+    id: localId,
+    plant_id: plantId,
+    type_id: formData.typeId,
+    from_location_id: formData.fromLocationId ?? null,
+    to_location_id: formData.toLocationId ?? null,
+    quantity: formData.quantity ?? 1,
+    notes: formData.notes,
+    created_at: new Date().toISOString(),
+    _pending: true
+  }
+
+  if (!store.movementsByPlant[plantId]) {
+    store.movementsByPlant[plantId] = []
+  }
+
+  store.movementsByPlant[plantId].unshift(localMovement)
+  await db.movements.put(localMovement)
+
+  // nurseryId — фиксация питомника очереди (F7), localId — замена на серверный id (F8),
+  // clientRequestId — идемпотентность повторной доставки (F2).
+  await addToQueue('create_movement', {
+    plantId,
+    nurseryId,
+    localId,
+    clientRequestId,
+    ...formData
+  })
+  return localMovement
+}
 
 async function applyMovementToPlant(plantsStore, plantId, movement) {
   const updates = {}

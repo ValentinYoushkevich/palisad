@@ -27,13 +27,13 @@ export async function createMovement(nurseryId, plantId, userId, data) {
     throw new AppError('Нельзя добавлять движения к проданному или списанному растению', 400);
   }
 
-  // findById репозитория учитывает системные типы (nursery_id IS NULL) + типы своего
-  // питомника, но НЕ типы чужого — иначе можно применить чужой sets_status.
-  const movementType = await movementTypeRepo.findById(nurseryId, data.typeId);
-  if (!movementType?.is_active) {
-    throw new AppError('Тип движения не найден', 404);
-  }
+  const movementType = await resolveMovementType(nurseryId, data.typeId);
   await requireMovementLocations(nurseryId, data);
+
+  const duplicate = await findDuplicateMovement(plantId, data.clientRequestId);
+  if (duplicate) {
+    return duplicate;
+  }
 
   // Вставка движения и вызванное им изменение статуса/локации растения — атомарны:
   // раньше при сбое applyMovementToPlant движение оставалось без отражения в растении
@@ -48,6 +48,7 @@ export async function createMovement(nurseryId, plantId, userId, data) {
         to_location_id: data.toLocationId ?? null,
         quantity: data.quantity,
         notes: data.notes ?? null,
+        client_request_id: data.clientRequestId ?? null,
       },
       trx
     );
@@ -104,6 +105,27 @@ async function requireMovementLocations(nurseryId, data) {
       throw new AppError('Локация назначения не найдена', 404);
     }
   }
+}
+
+// findById учитывает системные типы (nursery_id IS NULL) + типы своего питомника, но НЕ
+// чужого — иначе можно применить чужой sets_status.
+async function resolveMovementType(nurseryId, typeId) {
+  const movementType = await movementTypeRepo.findById(nurseryId, typeId);
+  if (!movementType?.is_active) {
+    throw new AppError('Тип движения не найден', 404);
+  }
+
+  return movementType;
+}
+
+// Идемпотентность повторной доставки офлайн-очереди (F2): при том же clientRequestId
+// возвращаем уже созданное движение — не дублируем и не применяем изменения растения заново.
+function findDuplicateMovement(plantId, clientRequestId) {
+  if (!clientRequestId) {
+    return null;
+  }
+
+  return movementRepo.findByClientRequestId(plantId, clientRequestId);
 }
 
 async function applyMovementToPlant(plantId, setsStatus, toLocationId, executor) {
