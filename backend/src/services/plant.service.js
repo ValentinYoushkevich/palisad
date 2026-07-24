@@ -93,7 +93,7 @@ export async function createPlant(nurseryId, accountId, data, userId) {
   return plant;
 }
 
-export async function bulkCreate(nurseryId, accountId, template, count) {
+export async function bulkCreate({ nurseryId, accountId, userId, template, count }) {
   await resolveReferences(nurseryId, template);
 
   // B28: коды должны быть уникальны не только против БД, но и в пределах самой партии.
@@ -130,14 +130,12 @@ export async function bulkCreate(nurseryId, accountId, template, count) {
     return plantRepo.bulkCreate(records, trx);
   });
 
-  // B28: bulk раньше вообще не писал activity. Логируем создание каждого растения по
-  // образцу одиночного createPlant. logActivity — best-effort (свои ошибки глотает),
-  // поэтому цикл не может уронить уже успешный ответ. userId здесь не пробрасывается
-  // (контроллер bulkCreate его не передаёт, а 5-й параметр упирается в max-params) —
-  // атрибуция появится, когда bulk-путь начнёт передавать userId; см. отчёт.
+  // B28: bulk раньше не писал activity. Логируем каждое растение по образцу createPlant,
+  // с атрибуцией автора (userId); logActivity — best-effort, ответ не уронит.
   for (const plant of plants) {
     await logActivity({
       nurseryId,
+      userId,
       eventType: EVENT_TYPES.PLANT_CREATED,
       entityType: ENTITY_TYPES.PLANT,
       entityId: plant.id,

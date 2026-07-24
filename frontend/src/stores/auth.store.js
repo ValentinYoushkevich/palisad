@@ -136,6 +136,13 @@ export const useAuthStore = defineStore('auth', {
 
       try {
         await http.post('/auth/logout')
+      } catch (error) {
+        // F5: офлайн/сетевая ошибка запроса не должна ронять logout — локальная очистка в
+        // finally всё равно выполняется, а вызывающий (accept-ветки AppLayout /
+        // ChangePasswordPage) ждёт нормального резолва, чтобы сделать router.push('/login').
+        if (import.meta.env.DEV) {
+          console.warn('Logout request failed, clearing local session anyway', error)
+        }
       } finally {
         await this.clearSession()
         nurseryStore.resetState()

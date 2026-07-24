@@ -14,10 +14,25 @@ vi.mock('primevue/usetoast', () => ({
 // realm, Blob хранится и отдаётся Dexie нормально.
 const photosState = vi.hoisted(() => ({ list: [] }))
 vi.mock('@/db/pendingPhotos.service', () => ({
-  getPendingPhotos: vi.fn(async () => photosState.list),
+  getPendingPhotos: vi.fn(async () => photosState.list.filter((photo) => photo.status === 'pending')),
+  getPhotoById: vi.fn(async (localId) => photosState.list.find((photo) => photo.localId === localId)),
   savePhoto: vi.fn(),
-  markPhotoDone: vi.fn(),
-  markPhotoFailed: vi.fn()
+  markPhotoDone: vi.fn(async (localId) => {
+    photosState.list = photosState.list.filter((photo) => photo.localId !== localId)
+  }),
+  markPhotoFailed: vi.fn(async (localId) => {
+    const photo = photosState.list.find((entry) => entry.localId === localId)
+    if (photo) {
+      photo.status = 'failed'
+    }
+  }),
+  resetFailedPhotos: vi.fn(async () => {
+    for (const photo of photosState.list) {
+      if (photo.status === 'failed') {
+        photo.status = 'pending'
+      }
+    }
+  })
 }))
 
 import { useSyncManager } from '@/composables/useSyncManager'
@@ -84,16 +99,53 @@ describe('useSyncManager photo sync (F13)', () => {
     expect(await getPending()).toHaveLength(0)
   })
 
-  it('ошибка загрузки помечает pending_photo failed и элемент очереди', async () => {
+  it('F13: транзиентная ошибка НЕ помечает фото failed, пока элемент очереди ретраится', async () => {
     http.post.mockRejectedValue({ response: { status: 500 } })
     await addToQueue('attach_photo', { operationId: 'srv_op', plantId: 'p1', nurseryId: 'n1', localId: 'ph1' })
 
     const { processQueue } = useSyncManager()
     await processQueue()
 
-    expect(markPhotoFailed).toHaveBeenCalledWith('ph1')
+    // Первый сбой: элемент остаётся pending, статус фото не тронут — блоб не потерян.
+    expect(markPhotoFailed).not.toHaveBeenCalled()
     const queue = await getPending()
     expect(queue).toHaveLength(1)
     expect(queue[0].retries).toBe(1)
+
+    // Следующий прогон: фото по-прежнему находится (по id, не только среди pending),
+    // отправка повторяется — элемент НЕ закрывается markDone.
+    await processQueue()
+    expect(http.post).toHaveBeenCalledTimes(2)
+    expect(await getPending()).toHaveLength(1)
+  })
+
+  it('F13: фото помечается failed только когда элемент очереди исчерпал ретраи', async () => {
+    http.post.mockRejectedValue({ response: { status: 500 } })
+    await addToQueue('attach_photo', { operationId: 'srv_op', plantId: 'p1', nurseryId: 'n1', localId: 'ph1' })
+
+    const { processQueue } = useSyncManager()
+    await processQueue()
+    await processQueue()
+    expect(markPhotoFailed).not.toHaveBeenCalled()
+
+    // Третий сбой переводит элемент очереди в failed — только теперь фото помечается.
+    await processQueue()
+    expect(markPhotoFailed).toHaveBeenCalledWith('ph1')
+    expect(await getPending()).toHaveLength(0)
+    // Запись не удалена: retryFailed вернёт её в pending вместе с элементом очереди.
+    expect(photosState.list[0].status).toBe('failed')
+  })
+
+  it('F13: markDone по «фото не найдено» — только когда записи действительно нет', async () => {
+    http.post.mockResolvedValue({ data: { id: 'ph_srv' } })
+    // Запись уже удалена markPhotoDone (фото отправлено ранее) — элемент можно закрыть.
+    photosState.list = []
+    await addToQueue('attach_photo', { operationId: 'srv_op', plantId: 'p1', nurseryId: 'n1', localId: 'ph1' })
+
+    const { processQueue } = useSyncManager()
+    await processQueue()
+
+    expect(http.post).not.toHaveBeenCalled()
+    expect(await getPending()).toHaveLength(0)
   })
 })

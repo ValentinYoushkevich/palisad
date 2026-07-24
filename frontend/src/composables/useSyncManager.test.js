@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/services/http', () => ({
   default: {
@@ -14,13 +14,27 @@ vi.mock('primevue/usetoast', () => ({
 
 import { useSyncManager } from '@/composables/useSyncManager'
 import db from '@/db/indexedDb'
-import { addToQueue, getFailedCount, getPending } from '@/db/syncQueue.service'
+import { addToQueue, getFailedCount, getPending, retryFailed } from '@/db/syncQueue.service'
 import http from '@/services/http'
 
 async function resetTables() {
   await db.table('sync_queue').clear()
+  await db.table('pending_photos').clear()
   await db.operations.clear()
   await db.movements.clear()
+}
+
+// Blob не переживает structuredClone в fake-indexeddb+jsdom (см. useSyncManager.photo.test.js),
+// поэтому в F13-тестах blob хранится как Uint8Array, а FormData стабится no-op классом —
+// сбой приходит именно из замоканного http.post, как в реальном транзиентном 500.
+function seedPendingPhoto(status = 'pending') {
+  return db.table('pending_photos').add({
+    operation_id: 'srv_op',
+    blob: new Uint8Array([1, 2, 3]),
+    mime_type: 'image/webp',
+    status,
+    created_at: Date.now()
+  })
 }
 
 function queueCreateOperation(overrides = {}) {
@@ -38,6 +52,10 @@ describe('useSyncManager', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     await resetTables()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('F1: параллельные processQueue не отправляют один элемент дважды', async () => {
@@ -106,5 +124,64 @@ describe('useSyncManager', () => {
     const pending = await getPending()
     expect(pending).toHaveLength(1)
     expect(pending[0].retries).toBe(1)
+  })
+
+  it('F13: транзиентный сбой POST фото не теряет запись и не закрывает элемент markDone', async () => {
+    vi.stubGlobal('FormData', class { append() {} })
+    http.post.mockRejectedValue({ response: { status: 500 } })
+    const localId = await seedPendingPhoto()
+    await addToQueue('attach_photo', { operationId: 'srv_op', plantId: 'p1', nurseryId: 'n1', localId })
+
+    const { processQueue } = useSyncManager()
+    await processQueue()
+
+    // Первый сбой: элемент очереди остаётся pending, фото НЕ помечено failed.
+    let queue = await getPending()
+    expect(queue).toHaveLength(1)
+    expect(queue[0].retries).toBe(1)
+    expect((await db.table('pending_photos').get(localId)).status).toBe('pending')
+
+    // Следующий прогон: фото найдено, отправка повторена — элемент не «закрыт» markDone.
+    await processQueue()
+    queue = await getPending()
+    expect(queue).toHaveLength(1)
+    expect(queue[0].retries).toBe(2)
+    expect(http.post).toHaveBeenCalledTimes(2)
+    expect(await db.table('pending_photos').get(localId)).toBeDefined()
+  })
+
+  it('F13: фото помечается failed только при исчерпании ретраев элемента очереди', async () => {
+    vi.stubGlobal('FormData', class { append() {} })
+    http.post.mockRejectedValue({ response: { status: 500 } })
+    const localId = await seedPendingPhoto()
+    await addToQueue('attach_photo', { operationId: 'srv_op', plantId: 'p1', nurseryId: 'n1', localId })
+
+    const { processQueue } = useSyncManager()
+    await processQueue()
+    await processQueue()
+    expect((await db.table('pending_photos').get(localId)).status).toBe('pending')
+
+    // Третий сбой переводит элемент очереди в failed — вместе с ним помечается и фото.
+    await processQueue()
+    expect(await getFailedCount()).toBe(1)
+    expect((await db.table('pending_photos').get(localId)).status).toBe('failed')
+  })
+
+  it('F13: retryFailed возвращает в pending и элемент очереди, и зависшее фото', async () => {
+    const localId = await seedPendingPhoto('failed')
+    await db.table('sync_queue').add({
+      type: 'attach_photo',
+      payload: { operationId: 'srv_op', plantId: 'p1', nurseryId: 'n1', localId },
+      timestamp: Date.now(),
+      retries: 3,
+      status: 'failed'
+    })
+
+    await retryFailed()
+
+    const queue = await getPending()
+    expect(queue).toHaveLength(1)
+    expect(queue[0].retries).toBe(0)
+    expect((await db.table('pending_photos').get(localId)).status).toBe('pending')
   })
 })

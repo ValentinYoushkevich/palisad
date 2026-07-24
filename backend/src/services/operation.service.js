@@ -1,6 +1,7 @@
 import db from '@/config/knex.js';
 import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { CLOSED_STATUSES } from '@/constants/operation.constants.js';
+import * as containerTypeRepo from '@/repositories/containerType.repository.js';
 import * as operationRepo from '@/repositories/operation.repository.js';
 import * as photoRepo from '@/repositories/photo.repository.js';
 import * as plantRepo from '@/repositories/plant.repository.js';
@@ -202,11 +203,19 @@ export async function deletePhoto(nurseryId, plantId, operationId, photoId) {
 
 // Применяет побочные эффекты операции внутри переданной транзакции: transplant меняет
 // контейнер растения, change_stage — стадию и пишет запись в историю. Валидирует
-// обязательные поля и принадлежность стадии питомнику.
+// обязательные поля и принадлежность стадии/контейнера питомнику.
 async function applyOperationSideEffects(trx, { nurseryId, plantId, userId, data }) {
   if (data.type === 'transplant') {
     if (!data.newContainerId) {
       throw new AppError('Для transplant требуется newContainerId', 400);
+    }
+    // B5: контейнер обязан принадлежать питомнику (репозиторий допускает системные
+    // строки с nursery_id IS NULL) — как стадия в change_stage ниже. Без проверки
+    // transplant привязывал растение к container_type чужого питомника, и его имя
+    // утекало через JOIN в findPage.
+    const container = await containerTypeRepo.findById(nurseryId, data.newContainerId);
+    if (!container) {
+      throw new AppError('Тип контейнера не найден', 404);
     }
     await plantRepo.updateById(plantId, { container_id: data.newContainerId }, trx);
   }

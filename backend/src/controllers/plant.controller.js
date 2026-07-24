@@ -59,12 +59,13 @@ export async function bulkCreate(req, res, next) {
   try {
     const { count, template } = req.body;
     return res.status(201).json(
-      await plantService.bulkCreate(
-        req.params.nurseryId,
-        req.user.accountId,
+      await plantService.bulkCreate({
+        nurseryId: req.params.nurseryId,
+        accountId: req.user.accountId,
+        userId: req.user.userId,
         template,
-        count
-      )
+        count,
+      })
     );
   } catch (err) {
     return next(err);

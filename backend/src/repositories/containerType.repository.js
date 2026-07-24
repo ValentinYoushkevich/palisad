@@ -33,10 +33,12 @@ export function updateById(id, data) {
     .then((rows) => rows[0]);
 }
 
+// Считает ВСЕ ссылки, включая soft-deleted растения: FK plants.container_id — ON DELETE
+// SET NULL, и физическое удаление контейнера молча обнулило бы его у удалённых растений —
+// restore вернул бы растение уже без контейнера (B23).
 export function countUsedByPlants(id) {
   return db('plants')
     .where({ container_id: id })
-    .whereNull('deleted_at')
     .count('id as count')
     .then((rows) => Number(rows[0].count));
 }

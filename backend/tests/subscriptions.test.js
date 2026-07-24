@@ -38,8 +38,8 @@ describe('M6 — Подписки', () => {
     expect(res.body.id).toBe(sub.id);
     expect(res.body.id).not.toBe(sub.plan_id);
     expect(res.body.plan_id).toBe(plan.id);
-    // статус подписки (trial/active), а не поле плана
-    expect(['trial', 'active']).toContain(res.body.status);
+    // статус подписки (точно как в БД), а не поле плана
+    expect(res.body.status).toBe(sub.status);
     // обратная совместимость: лимиты/фичи плана под исходными именами
     expect(res.body.plant_limit).toBe(plan.plant_limit);
     expect(res.body.user_limit).toBe(plan.user_limit);

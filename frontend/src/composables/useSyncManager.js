@@ -1,4 +1,4 @@
-import { getPendingPhotos, markPhotoDone, markPhotoFailed } from '@/db/pendingPhotos.service'
+import { getPendingPhotos, getPhotoById, markPhotoDone, markPhotoFailed } from '@/db/pendingPhotos.service'
 import { getById, getFailedCount, getPending, markDone, markFailed, reconcileLocalId } from '@/db/syncQueue.service'
 import http from '@/services/http'
 import { useNurseryStore } from '@/stores/nursery.store'
@@ -131,12 +131,19 @@ async function processPhotoItem(item) {
   const nurseryId = payload.nurseryId || useNurseryStore().nurseryId
 
   try {
-    const pendingPhotos = await getPendingPhotos()
-    const pending = pendingPhotos.find(
-      (photo) => photo.localId === payload.localId || photo.operation_id === payload.operationId
-    )
+    // F13: запись ищем по ключу НЕЗАВИСИМО от статуса. Раньше поиск шёл только среди
+    // 'pending' — фото со статусом 'failed' при ещё живом элементе очереди «не находилось»,
+    // элемент закрывался markDone ниже, и блоб терялся навсегда.
+    let pending = await getPhotoById(payload.localId)
+
+    if (!pending && payload.operationId) {
+      const pendingPhotos = await getPendingPhotos()
+      pending = pendingPhotos.find((photo) => photo.operation_id === payload.operationId)
+    }
 
     if (!pending) {
+      // Записи действительно нет (уже отправлена и удалена markPhotoDone) — только тогда
+      // элемент очереди можно закрывать (F13).
       await markDone(item.id)
       return
     }
@@ -160,10 +167,15 @@ async function processPhotoItem(item) {
       console.warn('Sync photo item failed', error)
     }
 
-    if (payload?.localId) {
+    await markFailed(item.id)
+
+    // F13: фото помечаем failed только когда сам элемент очереди исчерпал ретраи и стал
+    // 'failed'. Пока элемент pending, транзиентная ошибка не должна трогать статус фото —
+    // иначе на следующем прогоне оно «не находилось» и терялось.
+    const current = await getById(item.id)
+    if (current?.status === 'failed' && payload?.localId !== undefined && payload?.localId !== null) {
       await markPhotoFailed(payload.localId)
     }
-    await markFailed(item.id)
   }
 }
 

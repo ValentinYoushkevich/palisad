@@ -7,9 +7,4 @@ export const SYNC_QUEUE_TYPES = {
   ATTACH_PHOTO: 'attach_photo'
 }
 
-export const SYNC_QUEUE_STATUSES = {
-  PENDING: 'pending',
-  FAILED: 'failed'
-}
-
 export const ALLOWED_SYNC_QUEUE_TYPES = Object.values(SYNC_QUEUE_TYPES)

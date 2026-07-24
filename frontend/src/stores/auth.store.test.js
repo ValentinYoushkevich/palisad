@@ -111,6 +111,19 @@ describe('auth.store', () => {
       expect(result).toEqual({ ok: true })
       expect(await db.table('sync_queue').count()).toBe(0)
     })
+
+    it('офлайн: сетевая ошибка /auth/logout не роняет промис — локальная очистка проходит', async () => {
+      // F5: без catch промис logout реджектился, и accept-ветка AppLayout/ChangePasswordPage
+      // не доходила до router.push('/login').
+      http.post.mockRejectedValue(new TypeError('Network Error'))
+      const store = useAuthStore()
+      store.setUser({ id: 'u1', role: 'worker' })
+
+      const result = await store.logout({ force: true })
+
+      expect(result).toEqual({ ok: true })
+      expect(store.user).toBeNull()
+    })
   })
 
   describe('F6 — clearSession чистит офлайн-данные прошлого аккаунта', () => {

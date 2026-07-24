@@ -264,6 +264,25 @@ describe('T4 — изоляция данных между питомниками
       expect(byContainer.status).toBe(404);
       expect(byStage.status).toBe(404);
     });
+
+    // B5: побочный эффект операции transplant — тот же вектор, что create/update растения:
+    // newContainerId обязан принадлежать питомнику (или быть системным).
+    it('POST операции transplant с чужим newContainerId → 404', async () => {
+      const res = await api()
+        .post(`/api/nurseries/${B.nurseryId}/plants/${plantB.id}/operations`)
+        .set('Cookie', B.cookie)
+        .send({ type: 'transplant', newContainerId: containerA.id });
+      expect(res.status).toBe(404);
+    });
+
+    it('позитив: transplant своего растения в СИСТЕМНЫЙ контейнер → 201', async () => {
+      const sysContainer = await systemContainerType('P9');
+      const res = await api()
+        .post(`/api/nurseries/${B.nurseryId}/plants/${plantB.id}/operations`)
+        .set('Cookie', B.cookie)
+        .send({ type: 'transplant', newContainerId: sysContainer.id });
+      expect(res.status).toBe(201);
+    });
   });
 
   // ПОЗИТИВНЫЙ КОНТРОЛЬ: системные справочники (nursery_id IS NULL) общие для всех

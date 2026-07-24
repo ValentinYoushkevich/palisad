@@ -74,6 +74,8 @@ CREATE TABLE subscriptions (
                             CHECK (status IN ('trial', 'active', 'expired', 'cancelled')),
   started_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   expires_at    TIMESTAMPTZ,
+  -- дедуп уведомления SUBSCRIPTION_EXPIRING за 3 дня до expires_at (миграция 20260724140000, B13)
+  expiring_notified_at TIMESTAMPTZ,
   cancelled_at  TIMESTAMPTZ,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()

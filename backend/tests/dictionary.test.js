@@ -197,4 +197,35 @@ describe('M8 — Справочники', () => {
     const list = await api().get(ctBase).set('Cookie', ctx.cookie);
     expect(list.status).toBe(200);
   });
+
+  // B23: soft-deleted растения тоже держат ссылку (FK plants.container_id — ON DELETE
+  // SET NULL): контейнер, на который ссылается только удалённое растение, деактивируется,
+  // а не удаляется физически — иначе restore вернул бы растение уже без контейнера.
+  it('удаление container type, занятого только soft-deleted растением — мягкое', async () => {
+    const ctx = await createOwnerWithNursery();
+    const ctBase = `/api/nurseries/${ctx.nurseryId}/container-types`;
+    const create = await api()
+      .post(ctBase)
+      .set('Cookie', ctx.cookie)
+      .send({ code: `CUST-${Date.now()}`, name: 'Ghost Pot', container_kind: 'pot', volume_liters: 3 });
+    expect(create.status).toBe(201);
+    const custom = create.body;
+
+    const plant = (await api()
+      .post(`/api/nurseries/${ctx.nurseryId}/plants`)
+      .set('Cookie', ctx.cookie)
+      .send({ containerId: custom.id, variety: 'Ghost user' })).body;
+    const softDel = await api()
+      .delete(`/api/nurseries/${ctx.nurseryId}/plants/${plant.id}`)
+      .set('Cookie', ctx.cookie);
+    expect(softDel.status).toBe(200);
+
+    const del = await api().delete(`${ctBase}/${custom.id}`).set('Cookie', ctx.cookie);
+    expect(del.status).toBe(200);
+    const row = await db('container_types').where({ id: custom.id }).first();
+    expect(row.is_active).toBe(false);
+    // ссылка удалённого растения цела — restore вернёт его с контейнером
+    const plantRow = await db('plants').where({ id: plant.id }).first();
+    expect(plantRow.container_id).toBe(custom.id);
+  });
 });

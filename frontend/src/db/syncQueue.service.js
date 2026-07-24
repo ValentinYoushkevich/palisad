@@ -1,5 +1,6 @@
 import { ALLOWED_SYNC_QUEUE_TYPES } from '@/constants/syncQueue.constants'
 import db from '@/db/indexedDb'
+import { resetFailedPhotos } from '@/db/pendingPhotos.service'
 
 function ensureValidType(type) {
   if (ALLOWED_SYNC_QUEUE_TYPES.includes(type)) {
@@ -64,6 +65,10 @@ export async function retryFailed() {
       status: 'pending',
       retries: 0
     })
+
+  // F13: attach_photo-элементы бессмысленно ретраить без реанимации самих фото —
+  // failed-запись pending_photos иначе «не находится» и элемент закрывается markDone.
+  await resetFailedPhotos()
 }
 
 // После успешной синхронизации create_* заменяет локальный (local_...) id на серверный:
