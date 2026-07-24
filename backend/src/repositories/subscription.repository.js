@@ -4,8 +4,8 @@ export function getFreePlan() {
   return db('plans').where({ slug: 'free', is_active: true }).first();
 }
 
-export function create(data) {
-  return db('subscriptions')
+export function create(data, executor = db) {
+  return executor('subscriptions')
     .insert(data)
     .returning('*')
     .then((rows) => rows[0]);
@@ -19,8 +19,8 @@ export function getActive(accountId) {
     .first();
 }
 
-export function getActiveWithPlan(accountId) {
-  return db('subscriptions')
+export function getActiveWithPlan(accountId, executor = db) {
+  return executor('subscriptions')
     .join('plans', 'subscriptions.plan_id', 'plans.id')
     .where('subscriptions.account_id', accountId)
     .whereIn('subscriptions.status', ['trial', 'active'])
@@ -33,8 +33,8 @@ export function getAllPlans() {
   return db('plans').where({ is_active: true }).orderBy('created_at', 'asc');
 }
 
-export function cancelActive(accountId) {
-  return db('subscriptions')
+export function cancelActive(accountId, executor = db) {
+  return executor('subscriptions')
     .where({ account_id: accountId })
     .whereIn('status', ['trial', 'active'])
     .update({

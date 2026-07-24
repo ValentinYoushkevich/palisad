@@ -27,8 +27,8 @@ export function findByNurseryAndId(nurseryId, id) {
     .first();
 }
 
-export function create(data) {
-  return db('movements')
+export function create(data, executor = db) {
+  return executor('movements')
     .insert(data)
     .returning('*')
     .then((rows) => rows[0]);

@@ -1,5 +1,6 @@
 import argon2 from 'argon2';
 
+import db from '@/config/knex.js';
 import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import {
   ACCESS_TTL_MS,
@@ -32,19 +33,20 @@ export async function register(data) {
   }
 
   const passwordHash = await argon2.hash(data.password);
-  const account = await accountRepo.create({
-    email: data.email,
-    password_hash: passwordHash,
-    name: data.name,
-  });
 
-  await subscriptionRepo.create({
-    account_id: account.id,
-    plan_id: freePlan.id,
-    status: 'trial',
+  // Аккаунт и его стартовая подписка создаются атомарно: без транзакции сбой второго
+  // insert оставлял аккаунт без подписки, и любой planGuard кидал бы 403 (см. B9).
+  return db.transaction(async (trx) => {
+    const account = await accountRepo.create(
+      { email: data.email, password_hash: passwordHash, name: data.name },
+      trx
+    );
+    await subscriptionRepo.create(
+      { account_id: account.id, plan_id: freePlan.id, status: 'trial' },
+      trx
+    );
+    return account;
   });
-
-  return account;
 }
 
 export async function login(email, password, res) {

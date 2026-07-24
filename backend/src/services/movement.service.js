@@ -1,3 +1,4 @@
+import db from '@/config/knex.js';
 import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { STRUCTURE_ROLES } from '@/constants/roles.constants.js';
 import * as locationRepo from '@/repositories/location.repository.js';
@@ -34,17 +35,25 @@ export async function createMovement(nurseryId, plantId, userId, data) {
   }
   await requireMovementLocations(nurseryId, data);
 
-  const movement = await movementRepo.create({
-    plant_id: plantId,
-    user_id: userId,
-    type_id: data.typeId,
-    from_location_id: data.fromLocationId ?? plant.location_id,
-    to_location_id: data.toLocationId ?? null,
-    quantity: data.quantity,
-    notes: data.notes ?? null,
+  // Вставка движения и вызванное им изменение статуса/локации растения — атомарны:
+  // раньше при сбое applyMovementToPlant движение оставалось без отражения в растении
+  // (или наоборот), см. B9.
+  const movement = await db.transaction(async (trx) => {
+    const created = await movementRepo.create(
+      {
+        plant_id: plantId,
+        user_id: userId,
+        type_id: data.typeId,
+        from_location_id: data.fromLocationId ?? plant.location_id,
+        to_location_id: data.toLocationId ?? null,
+        quantity: data.quantity,
+        notes: data.notes ?? null,
+      },
+      trx
+    );
+    await applyMovementToPlant(plantId, movementType.sets_status, data.toLocationId, trx);
+    return created;
   });
-
-  await applyMovementToPlant(plantId, movementType.sets_status, data.toLocationId);
   await logActivity({
     nurseryId,
     userId,
@@ -97,7 +106,7 @@ async function requireMovementLocations(nurseryId, data) {
   }
 }
 
-async function applyMovementToPlant(plantId, setsStatus, toLocationId) {
+async function applyMovementToPlant(plantId, setsStatus, toLocationId, executor) {
   const updates = {};
   if (setsStatus) {
     updates.status = setsStatus;
@@ -107,6 +116,6 @@ async function applyMovementToPlant(plantId, setsStatus, toLocationId) {
   }
 
   if (Object.keys(updates).length > 0) {
-    await plantRepo.updateById(plantId, updates);
+    await plantRepo.updateById(plantId, updates, executor);
   }
 }

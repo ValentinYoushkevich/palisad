@@ -1,5 +1,20 @@
 import db from '@/config/knex.js';
 
+// Публичные колонки users. НИКОГДА не отдаём password_hash наружу: create/updateById
+// раньше делали returning('*'), а findByNurseryAndId — select('*'), и хэш утекал в
+// ответы staff-API (см. B17).
+const SAFE_USER_COLUMNS = [
+  'id',
+  'nursery_id',
+  'name',
+  'role',
+  'email',
+  'is_active',
+  'must_change_password',
+  'created_at',
+  'updated_at',
+];
+
 export function findOwnerByAccountId(accountId) {
   return db('users')
     .join('nurseries', 'users.nursery_id', 'nurseries.id')
@@ -32,10 +47,10 @@ export function clearMustChangePassword(accountId) {
     });
 }
 
-export function create(data) {
-  return db('users')
+export function create(data, executor = db) {
+  return executor('users')
     .insert(data)
-    .returning('*')
+    .returning(SAFE_USER_COLUMNS)
     .then((rows) => rows[0]);
 }
 
@@ -65,7 +80,17 @@ export function findById(id) {
 }
 
 export function findByNurseryAndId(nurseryId, id) {
-  return db('users').where({ nursery_id: nurseryId, id }).first();
+  return db('users')
+    .where({ nursery_id: nurseryId, id })
+    .select(SAFE_USER_COLUMNS)
+    .first();
+}
+
+export function countByNursery(nurseryId, executor = db) {
+  return executor('users')
+    .where({ nursery_id: nurseryId })
+    .count('id as count')
+    .then((rows) => Number(rows[0].count));
 }
 
 export function countActiveOwners(nurseryId) {
@@ -79,6 +104,6 @@ export function updateById(id, data) {
   return db('users')
     .where({ id })
     .update({ ...data, updated_at: db.fn.now() })
-    .returning('*')
+    .returning(SAFE_USER_COLUMNS)
     .then((rows) => rows[0]);
 }

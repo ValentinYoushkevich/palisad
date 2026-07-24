@@ -80,8 +80,8 @@ export function countFiltered(nurseryId, filters = {}) {
     .then((rows) => Number(rows[0].count));
 }
 
-export function countByNursery(nurseryId) {
-  return db('plants')
+export function countByNursery(nurseryId, executor = db) {
+  return executor('plants')
     .where({ nursery_id: nurseryId })
     .whereNull('deleted_at')
     .count('id as count')
@@ -112,19 +112,19 @@ export function findByNumericCode(numericCode) {
   return db('plants').where({ numeric_code: numericCode }).whereNull('deleted_at').first();
 }
 
-export function create(data) {
-  return db('plants')
+export function create(data, executor = db) {
+  return executor('plants')
     .insert(data)
     .returning('*')
     .then((rows) => rows[0]);
 }
 
-export function bulkCreate(records) {
-  return db('plants').insert(records).returning('*');
+export function bulkCreate(records, executor = db) {
+  return executor('plants').insert(records).returning('*');
 }
 
-export function updateById(id, data) {
-  return db('plants')
+export function updateById(id, data, executor = db) {
+  return executor('plants')
     .where({ id })
     .update({ ...data, updated_at: db.fn.now() })
     .returning('*')

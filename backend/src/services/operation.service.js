@@ -1,3 +1,4 @@
+import db from '@/config/knex.js';
 import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { CLOSED_STATUSES } from '@/constants/operation.constants.js';
 import * as operationRepo from '@/repositories/operation.repository.js';
@@ -34,35 +35,15 @@ export async function createOperation({
     );
   }
 
-  if (data.type === 'transplant') {
-    if (!data.newContainerId) {
-      throw new AppError('Для transplant требуется newContainerId', 400);
-    }
-    await plantRepo.updateById(plant.id, { container_id: data.newContainerId });
-  }
-
-  if (data.type === 'change_stage') {
-    if (!data.newStageId) {
-      throw new AppError('Для change_stage требуется newStageId', 400);
-    }
-    const stage = await stageRepo.findById(nurseryId, data.newStageId);
-    if (!stage) {
-      throw new AppError('Стадия не найдена', 404);
-    }
-    await plantRepo.updateById(plant.id, { stage_id: data.newStageId });
-    await stageHistoryRepo.create({
-      plant_id: plant.id,
-      stage_id: data.newStageId,
-      changed_by: userId,
-      notes: data.notes ?? null,
-    });
-  }
-
-  const operation = await operationRepo.create({
-    plant_id: plantId,
-    user_id: userId,
-    type: data.type,
-    notes: data.notes ?? null,
+  // Побочные эффекты (смена контейнера/стадии + история) и вставка самой операции —
+  // в одной транзакции: раньше при сбое между шагами растение оставалось изменённым
+  // без операции-подтверждения (B9).
+  const operation = await db.transaction(async (trx) => {
+    await applyOperationSideEffects(trx, { nurseryId, plantId: plant.id, userId, data });
+    return operationRepo.create(
+      { plant_id: plantId, user_id: userId, type: data.type, notes: data.notes ?? null },
+      trx
+    );
   });
   await logActivity({
     nurseryId,
@@ -137,6 +118,38 @@ export async function deletePhoto(nurseryId, plantId, operationId, photoId) {
   }
 
   return photoRepo.deleteById(photoId);
+}
+
+// Применяет побочные эффекты операции внутри переданной транзакции: transplant меняет
+// контейнер растения, change_stage — стадию и пишет запись в историю. Валидирует
+// обязательные поля и принадлежность стадии питомнику.
+async function applyOperationSideEffects(trx, { nurseryId, plantId, userId, data }) {
+  if (data.type === 'transplant') {
+    if (!data.newContainerId) {
+      throw new AppError('Для transplant требуется newContainerId', 400);
+    }
+    await plantRepo.updateById(plantId, { container_id: data.newContainerId }, trx);
+  }
+
+  if (data.type === 'change_stage') {
+    if (!data.newStageId) {
+      throw new AppError('Для change_stage требуется newStageId', 400);
+    }
+    const stage = await stageRepo.findById(nurseryId, data.newStageId);
+    if (!stage) {
+      throw new AppError('Стадия не найдена', 404);
+    }
+    await plantRepo.updateById(plantId, { stage_id: data.newStageId }, trx);
+    await stageHistoryRepo.create(
+      {
+        plant_id: plantId,
+        stage_id: data.newStageId,
+        changed_by: userId,
+        notes: data.notes ?? null,
+      },
+      trx
+    );
+  }
 }
 
 async function requireOperation(plantId, id) {

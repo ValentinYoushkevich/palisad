@@ -1,3 +1,4 @@
+import db from '@/config/knex.js';
 import * as subscriptionRepo from '@/repositories/subscription.repository.js';
 import { AppError } from '@/utils/AppError.js';
 
@@ -20,10 +21,13 @@ export async function changePlan(accountId, planId) {
     throw new AppError('План не найден', 404);
   }
 
-  await subscriptionRepo.cancelActive(accountId);
-  return subscriptionRepo.create({
-    account_id: accountId,
-    plan_id: planId,
-    status: 'active',
+  // Отмена прежней подписки и создание новой — в одной транзакции: без неё сбой create
+  // оставлял аккаунт вообще без активной подписки (cancelActive уже закоммичен), см. B9.
+  return db.transaction(async (trx) => {
+    await subscriptionRepo.cancelActive(accountId, trx);
+    return subscriptionRepo.create(
+      { account_id: accountId, plan_id: planId, status: 'active' },
+      trx
+    );
   });
 }

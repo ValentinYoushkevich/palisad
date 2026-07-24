@@ -8,8 +8,8 @@ export function findById(id) {
   return db('nurseries').where({ id }).first();
 }
 
-export function create(data) {
-  return db('nurseries')
+export function create(data, executor = db) {
+  return executor('nurseries')
     .insert(data)
     .returning('*')
     .then((rows) => rows[0]);
@@ -23,8 +23,8 @@ export function updateById(id, data) {
     .then((rows) => rows[0]);
 }
 
-export function countByAccountId(accountId) {
-  return db('nurseries')
+export function countByAccountId(accountId, executor = db) {
+  return executor('nurseries')
     .where({ account_id: accountId })
     .count('id as count')
     .then((rows) => Number(rows[0].count));

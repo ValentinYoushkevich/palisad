@@ -8,8 +8,8 @@ export function findById(id) {
   return db('accounts').where({ id }).first();
 }
 
-export function create(data) {
-  return db('accounts')
+export function create(data, executor = db) {
+  return executor('accounts')
     .insert(data)
     .returning('*')
     .then((rows) => rows[0]);

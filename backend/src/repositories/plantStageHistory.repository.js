@@ -1,7 +1,7 @@
 import db from '@/config/knex.js';
 
-export function create(data) {
-  return db('plant_stage_history')
+export function create(data, executor = db) {
+  return executor('plant_stage_history')
     .insert(data)
     .returning('*')
     .then((rows) => rows[0]);

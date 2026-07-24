@@ -1,5 +1,6 @@
 import argon2 from 'argon2';
 
+import db from '@/config/knex.js';
 import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { NOTIFICATION_TYPES } from '@/constants/notification.constants.js';
 import * as subscriptionRepo from '@/repositories/subscription.repository.js';
@@ -7,6 +8,7 @@ import * as userRepo from '@/repositories/user.repository.js';
 import { AppError } from '@/utils/AppError.js';
 import { logActivity } from '@/utils/logActivity.js';
 import { notify } from '@/utils/notify.js';
+import { lockAccount } from '@/utils/planGuards.js';
 
 export function getUsers(nurseryId, filters) {
   return userRepo.findAllByNursery(nurseryId, {
@@ -21,17 +23,25 @@ export function getUserById(nurseryId, id) {
 }
 
 export async function createUser(nurseryId, accountId, data, actorUserId) {
-  await checkUserLimit(nurseryId, accountId);
   const passwordHash = await argon2.hash(data.password);
 
-  const user = await userRepo.create({
-    nursery_id: nurseryId,
-    name: data.name,
-    role: data.role,
-    password_hash: passwordHash,
-    email: data.email,
-    is_active: true,
-    must_change_password: true,
+  // Лимит пользователей проверяется под advisory-lock'ом в той же транзакции, что и
+  // вставка — иначе параллельные createUser пробивают user_limit (B10).
+  const user = await db.transaction(async (trx) => {
+    await lockAccount(trx, accountId);
+    await checkUserLimit(nurseryId, accountId, trx);
+    return userRepo.create(
+      {
+        nursery_id: nurseryId,
+        name: data.name,
+        role: data.role,
+        password_hash: passwordHash,
+        email: data.email,
+        is_active: true,
+        must_change_password: true,
+      },
+      trx
+    );
   });
   await logActivity({
     nurseryId,
@@ -109,14 +119,14 @@ async function guardLastOwner(nurseryId, user) {
   }
 }
 
-async function checkUserLimit(nurseryId, accountId) {
-  const sub = await subscriptionRepo.getActiveWithPlan(accountId);
+async function checkUserLimit(nurseryId, accountId, executor) {
+  const sub = await subscriptionRepo.getActiveWithPlan(accountId, executor);
   if (!sub || sub.user_limit === null) {
     return;
   }
 
-  const users = await userRepo.findAllByNursery(nurseryId);
-  if (users.length >= sub.user_limit) {
+  const count = await userRepo.countByNursery(nurseryId, executor);
+  if (count >= sub.user_limit) {
     throw new AppError('Достигнут лимит пользователей по текущему плану', 403);
   }
 }

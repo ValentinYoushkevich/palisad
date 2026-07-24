@@ -1,3 +1,4 @@
+import db from '@/config/knex.js';
 import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { ROLES } from '@/constants/roles.constants.js';
 import * as containerTypeRepo from '@/repositories/containerType.repository.js';
@@ -9,7 +10,7 @@ import * as stageRepo from '@/repositories/productionStage.repository.js';
 import * as tagRepo from '@/repositories/tag.repository.js';
 import { AppError } from '@/utils/AppError.js';
 import { logActivity } from '@/utils/logActivity.js';
-import { checkFeature, checkLimit } from '@/utils/planGuards.js';
+import { checkFeature, checkLimit, lockAccount } from '@/utils/planGuards.js';
 import { generateQrCode } from '@/utils/qrCode.js';
 
 export async function getPlants(nurseryId, filters) {
@@ -54,24 +55,32 @@ export async function findByNumericCode(nurseryId, numericCode) {
 }
 
 export async function createPlant(nurseryId, accountId, data, userId) {
-  const count = await plantRepo.countByNursery(nurseryId);
-  await checkLimit(accountId, 'plant_limit', count);
   await resolveReferences(nurseryId, data);
 
   const qrCode = generateQrCode();
   const numericCode = await generateUniqueNumericCode();
-  const plant = await plantRepo.create({
-    nursery_id: nurseryId,
-    nursery_species_id: data.speciesId ?? null,
-    location_id: data.locationId ?? null,
-    container_id: data.containerId ?? null,
-    stage_id: data.stageId ?? null,
-    variety: data.variety ?? null,
-    planted_at: data.plantedAt ?? null,
-    source: data.source ?? null,
-    notes: data.notes ?? null,
-    qr_code: qrCode,
-    numeric_code: numericCode,
+  // Лимит проверяется под advisory-lock'ом внутри той же транзакции, что и вставка,
+  // иначе параллельные создания пробивают plant_limit (TOCTOU, см. B10).
+  const plant = await db.transaction(async (trx) => {
+    await lockAccount(trx, accountId);
+    const count = await plantRepo.countByNursery(nurseryId, trx);
+    await checkLimit(accountId, 'plant_limit', count, trx);
+    return plantRepo.create(
+      {
+        nursery_id: nurseryId,
+        nursery_species_id: data.speciesId ?? null,
+        location_id: data.locationId ?? null,
+        container_id: data.containerId ?? null,
+        stage_id: data.stageId ?? null,
+        variety: data.variety ?? null,
+        planted_at: data.plantedAt ?? null,
+        source: data.source ?? null,
+        notes: data.notes ?? null,
+        qr_code: qrCode,
+        numeric_code: numericCode,
+      },
+      trx
+    );
   });
   await logActivity({
     nurseryId,
@@ -85,8 +94,6 @@ export async function createPlant(nurseryId, accountId, data, userId) {
 }
 
 export async function bulkCreate(nurseryId, accountId, template, count) {
-  const current = await plantRepo.countByNursery(nurseryId);
-  await checkLimit(accountId, 'plant_limit', current + count - 1);
   await resolveReferences(nurseryId, template);
 
   const records = [];
@@ -106,22 +113,44 @@ export async function bulkCreate(nurseryId, accountId, template, count) {
     });
   }
 
-  return plantRepo.bulkCreate(records);
+  // Как и в createPlant: лимит под advisory-lock'ом в транзакции, чтобы конкурентные
+  // bulk-вставки суммарно не пробили plant_limit (B10).
+  return db.transaction(async (trx) => {
+    await lockAccount(trx, accountId);
+    const current = await plantRepo.countByNursery(nurseryId, trx);
+    await checkLimit(accountId, 'plant_limit', current + count - 1, trx);
+    return plantRepo.bulkCreate(records, trx);
+  });
+}
+
+// Соответствие полей запроса колонкам. PATCH должен менять только переданные поля,
+// поэтому собираем объект update ровно из присутствующих ключей — иначе частичный
+// PATCH (например только notes) затирал бы species/location/stage в NULL (B15).
+const PLANT_UPDATE_FIELDS = {
+  speciesId: 'nursery_species_id',
+  locationId: 'location_id',
+  containerId: 'container_id',
+  stageId: 'stage_id',
+  variety: 'variety',
+  plantedAt: 'planted_at',
+  source: 'source',
+  notes: 'notes',
+};
+
+function buildPlantUpdate(data) {
+  const update = {};
+  for (const [key, column] of Object.entries(PLANT_UPDATE_FIELDS)) {
+    if (data[key] !== undefined) {
+      update[column] = data[key];
+    }
+  }
+  return update;
 }
 
 export async function updatePlant(nurseryId, id, data, userId) {
   await requirePlant(nurseryId, id);
   await resolveReferences(nurseryId, data);
-  const plant = await plantRepo.updateById(id, {
-    nursery_species_id: data.speciesId ?? null,
-    location_id: data.locationId ?? null,
-    container_id: data.containerId ?? null,
-    stage_id: data.stageId ?? null,
-    variety: data.variety ?? null,
-    planted_at: data.plantedAt ?? null,
-    source: data.source ?? null,
-    notes: data.notes ?? null,
-  });
+  const plant = await plantRepo.updateById(id, buildPlantUpdate(data));
   await logActivity({
     nurseryId,
     userId,

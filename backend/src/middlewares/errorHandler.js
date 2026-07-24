@@ -5,8 +5,14 @@ export default function errorHandler(err, req, res, _next) {
 
   const dbMapped = mapDbError(err);
   const status = dbMapped?.status || err.status || 500;
-  const message = dbMapped?.message || err.message || 'Internal Server Error';
   const errorCode = dbMapped?.errorCode || err.errorCode || null;
+
+  // Наружу отдаём текст ошибки только для «ожидаемых» ответов (status < 500): это
+  // AppError с осмысленным сообщением или замапленная ошибка БД. Для 5xx клиент получает
+  // нейтральный текст — иначе утекали бы SQL-сообщения, имена таблиц и констрейнтов (B8).
+  // Реальная причина всегда есть в логе выше.
+  const safeMessage = dbMapped?.message || err.message || 'Internal Server Error';
+  const message = status >= 500 ? 'Внутренняя ошибка сервера' : safeMessage;
 
   res.status(status).json({
     error: message,

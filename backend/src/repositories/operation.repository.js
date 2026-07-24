@@ -14,8 +14,8 @@ export function findByPlantAndId(plantId, id) {
     .first();
 }
 
-export function create(data) {
-  return db('operations')
+export function create(data, executor = db) {
+  return executor('operations')
     .insert(data)
     .returning('*')
     .then((rows) => rows[0]);
