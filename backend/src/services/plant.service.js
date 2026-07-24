@@ -1,7 +1,12 @@
 import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { ROLES } from '@/constants/roles.constants.js';
+import * as containerTypeRepo from '@/repositories/containerType.repository.js';
+import * as locationRepo from '@/repositories/location.repository.js';
+import * as nurserySpeciesRepo from '@/repositories/nurserySpecies.repository.js';
 import * as plantRepo from '@/repositories/plant.repository.js';
 import * as stageHistoryRepo from '@/repositories/plantStageHistory.repository.js';
+import * as stageRepo from '@/repositories/productionStage.repository.js';
+import * as tagRepo from '@/repositories/tag.repository.js';
 import { AppError } from '@/utils/AppError.js';
 import { logActivity } from '@/utils/logActivity.js';
 import { checkFeature, checkLimit } from '@/utils/planGuards.js';
@@ -51,6 +56,7 @@ export async function findByNumericCode(nurseryId, numericCode) {
 export async function createPlant(nurseryId, accountId, data, userId) {
   const count = await plantRepo.countByNursery(nurseryId);
   await checkLimit(accountId, 'plant_limit', count);
+  await resolveReferences(nurseryId, data);
 
   const qrCode = generateQrCode();
   const numericCode = await generateUniqueNumericCode();
@@ -81,6 +87,7 @@ export async function createPlant(nurseryId, accountId, data, userId) {
 export async function bulkCreate(nurseryId, accountId, template, count) {
   const current = await plantRepo.countByNursery(nurseryId);
   await checkLimit(accountId, 'plant_limit', current + count - 1);
+  await resolveReferences(nurseryId, template);
 
   const records = [];
   for (let i = 0; i < count; i += 1) {
@@ -104,6 +111,7 @@ export async function bulkCreate(nurseryId, accountId, template, count) {
 
 export async function updatePlant(nurseryId, id, data, userId) {
   await requirePlant(nurseryId, id);
+  await resolveReferences(nurseryId, data);
   const plant = await plantRepo.updateById(id, {
     nursery_species_id: data.speciesId ?? null,
     location_id: data.locationId ?? null,
@@ -164,11 +172,13 @@ export async function restore(nurseryId, id, user) {
 export async function addTag(nurseryId, plantId, tagId, accountId) {
   await checkFeature(accountId, 'feature_tags');
   await requirePlant(nurseryId, plantId);
+  await requireTag(nurseryId, tagId);
   return plantRepo.addTag(plantId, tagId);
 }
 
 export async function removeTag(nurseryId, plantId, tagId) {
   await requirePlant(nurseryId, plantId);
+  await requireTag(nurseryId, tagId);
   return plantRepo.removeTag(plantId, tagId);
 }
 
@@ -179,6 +189,46 @@ async function requirePlant(nurseryId, id) {
   }
 
   return plant;
+}
+
+async function requireTag(nurseryId, tagId) {
+  const tag = await tagRepo.findById(nurseryId, tagId);
+  if (!tag) {
+    throw new AppError('Тег не найден', 404);
+  }
+
+  return tag;
+}
+
+// Проверяет, что переданные ссылки принадлежат этому питомнику. Для контейнеров и
+// стадий findById репозитория допускает системные строки (nursery_id IS NULL), для
+// вида и локации — только строки своего питомника. Без этого можно привязать растение
+// к сущностям чужого питомника, и их имена утекут в выдачу через JOIN в findPage.
+async function resolveReferences(nurseryId, data) {
+  if (data.speciesId) {
+    const species = await nurserySpeciesRepo.findById(nurseryId, data.speciesId);
+    if (!species) {
+      throw new AppError('Вид не найден', 404);
+    }
+  }
+  if (data.locationId) {
+    const location = await locationRepo.findByNurseryAndId(nurseryId, data.locationId);
+    if (!location) {
+      throw new AppError('Локация не найдена', 404);
+    }
+  }
+  if (data.containerId) {
+    const container = await containerTypeRepo.findById(nurseryId, data.containerId);
+    if (!container) {
+      throw new AppError('Тип контейнера не найден', 404);
+    }
+  }
+  if (data.stageId) {
+    const stage = await stageRepo.findById(nurseryId, data.stageId);
+    if (!stage) {
+      throw new AppError('Стадия не найдена', 404);
+    }
+  }
 }
 
 async function generateUniqueNumericCode() {

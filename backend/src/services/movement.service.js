@@ -1,7 +1,8 @@
-import db from '@/config/knex.js';
 import { ENTITY_TYPES, EVENT_TYPES } from '@/constants/activity.constants.js';
 import { STRUCTURE_ROLES } from '@/constants/roles.constants.js';
+import * as locationRepo from '@/repositories/location.repository.js';
 import * as movementRepo from '@/repositories/movement.repository.js';
+import * as movementTypeRepo from '@/repositories/movementType.repository.js';
 import * as plantRepo from '@/repositories/plant.repository.js';
 import { AppError } from '@/utils/AppError.js';
 import { logActivity } from '@/utils/logActivity.js';
@@ -14,25 +15,24 @@ const EVENT_BY_MOVEMENT_SLUG = {
   transfer: EVENT_TYPES.MOVEMENT_TRANSFER,
 };
 
-export function getMovements(plantId) {
+export async function getMovements(nurseryId, plantId) {
+  await requirePlantInNursery(nurseryId, plantId);
   return movementRepo.findByPlant(plantId);
 }
 
 export async function createMovement(nurseryId, plantId, userId, data) {
-  const plant = await plantRepo.findByNurseryAndId(nurseryId, plantId);
-  if (!plant) {
-    throw new AppError('Растение не найдено', 404);
-  }
+  const plant = await requirePlantInNursery(nurseryId, plantId);
   if (CLOSED_STATUSES.includes(plant.status)) {
     throw new AppError('Нельзя добавлять движения к проданному или списанному растению', 400);
   }
 
-  const movementType = await db('movement_types')
-    .where({ id: data.typeId, is_active: true })
-    .first();
-  if (!movementType) {
+  // findById репозитория учитывает системные типы (nursery_id IS NULL) + типы своего
+  // питомника, но НЕ типы чужого — иначе можно применить чужой sets_status.
+  const movementType = await movementTypeRepo.findById(nurseryId, data.typeId);
+  if (!movementType?.is_active) {
     throw new AppError('Тип движения не найден', 404);
   }
+  await requireMovementLocations(nurseryId, data);
 
   const movement = await movementRepo.create({
     plant_id: plantId,
@@ -67,6 +67,34 @@ export async function deleteMovement(nurseryId, id, userRole) {
   }
 
   return movementRepo.deleteById(id);
+}
+
+// Гарантирует, что растение принадлежит питомнику из URL. Иначе движения читаются
+// и создаются по чужому plantId — кросс-tenant IDOR с утечкой имён локаций/юзеров.
+async function requirePlantInNursery(nurseryId, plantId) {
+  const plant = await plantRepo.findByNurseryAndId(nurseryId, plantId);
+  if (!plant) {
+    throw new AppError('Растение не найдено', 404);
+  }
+
+  return plant;
+}
+
+// Локации движения (откуда/куда) должны принадлежать этому питомнику — иначе растение
+// можно «переставить» в локацию чужого питомника.
+async function requireMovementLocations(nurseryId, data) {
+  if (data.fromLocationId) {
+    const fromLocation = await locationRepo.findByNurseryAndId(nurseryId, data.fromLocationId);
+    if (!fromLocation) {
+      throw new AppError('Локация отправления не найдена', 404);
+    }
+  }
+  if (data.toLocationId) {
+    const toLocation = await locationRepo.findByNurseryAndId(nurseryId, data.toLocationId);
+    if (!toLocation) {
+      throw new AppError('Локация назначения не найдена', 404);
+    }
+  }
 }
 
 async function applyMovementToPlant(plantId, setsStatus, toLocationId) {

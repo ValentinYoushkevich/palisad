@@ -9,7 +9,8 @@ import { AppError } from '@/utils/AppError.js';
 import { logActivity } from '@/utils/logActivity.js';
 import { checkFeature } from '@/utils/planGuards.js';
 
-export function getOperations(plantId) {
+export async function getOperations(nurseryId, plantId) {
+  await requirePlantInNursery(nurseryId, plantId);
   return operationRepo.findByPlant(plantId);
 }
 
@@ -74,7 +75,8 @@ export async function createOperation({
   return operation;
 }
 
-export async function updateOperation(plantId, id, userId, data) {
+export async function updateOperation({ nurseryId, plantId, id, userId, data }) {
+  await requirePlantInNursery(nurseryId, plantId);
   const operation = await requireOperation(plantId, id);
   if (operation.user_id !== userId) {
     throw new AppError('Можно редактировать только свои операции', 403);
@@ -83,7 +85,8 @@ export async function updateOperation(plantId, id, userId, data) {
   return operationRepo.updateById(id, data);
 }
 
-export async function softDelete(plantId, id, userId, userRole) {
+export async function softDelete({ nurseryId, plantId, id, userId, userRole }) {
+  await requirePlantInNursery(nurseryId, plantId);
   const operation = await requireOperation(plantId, id);
   const isOwner = userRole === 'owner';
   const isAuthor = operation.user_id === userId;
@@ -106,8 +109,9 @@ export async function softDelete(plantId, id, userId, userRole) {
   return true;
 }
 
-export async function attachPhoto(plantId, operationId, accountId, url) {
+export async function attachPhoto({ nurseryId, plantId, operationId, accountId, url }) {
   await checkFeature(accountId, 'feature_photos');
+  await requirePlantInNursery(nurseryId, plantId);
   const operation = await requireOperation(plantId, operationId);
   const photo = await photoRepo.create({ operation_id: operationId, url });
   const plant = await plantRepo.findById(plantId);
@@ -124,7 +128,8 @@ export async function attachPhoto(plantId, operationId, accountId, url) {
   return photo;
 }
 
-export async function deletePhoto(plantId, operationId, photoId) {
+export async function deletePhoto(nurseryId, plantId, operationId, photoId) {
+  await requirePlantInNursery(nurseryId, plantId);
   await requireOperation(plantId, operationId);
   const photo = await photoRepo.findById(photoId);
   if (!photo || photo.operation_id !== operationId) {
@@ -141,4 +146,15 @@ async function requireOperation(plantId, id) {
   }
 
   return operation;
+}
+
+// Гарантирует, что растение принадлежит питомнику из URL. Без этой проверки
+// вложенные ресурсы (операции, фото) доступны по чужому plantId — кросс-tenant IDOR.
+async function requirePlantInNursery(nurseryId, plantId) {
+  const plant = await plantRepo.findByNurseryAndId(nurseryId, plantId);
+  if (!plant) {
+    throw new AppError('Растение не найдено', 404);
+  }
+
+  return plant;
 }

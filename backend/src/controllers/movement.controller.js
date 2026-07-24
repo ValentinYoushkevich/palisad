@@ -2,7 +2,9 @@ import * as movementService from '@/services/movement.service.js';
 
 export async function getMovements(req, res, next) {
   try {
-    return res.json(await movementService.getMovements(req.params.plantId));
+    return res.json(
+      await movementService.getMovements(req.params.nurseryId, req.params.plantId)
+    );
   } catch (err) {
     return next(err);
   }

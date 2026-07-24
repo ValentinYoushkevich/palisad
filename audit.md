@@ -1,0 +1,559 @@
+# Аудит проекта «Палисад»
+
+**Дата:** 2026-07-24 · **Ветка:** `feature/v2-multi-nursery` (a75e1b2)
+**Область:** backend, frontend, база данных, тестовое покрытие.
+**Метод:** чтение кода (без запуска и изменений); самые тяжёлые находки перепроверены точечно.
+
+Каждое замечание имеет идентификатор (B — backend, F — frontend, D — база данных, T — тесты) —
+удобно ссылаться при планировании исправлений.
+
+---
+
+## Статус исправлений
+
+- **✅ Пункт 1 «Изоляция tenant'ов» — выполнено 2026-07-24.** Закрыты B1–B7 (сервисный слой),
+  добавлен схемный рубеж D2 (составные FK) и тест-матрица T4 (`backend/tests/tenantIsolation.test.js`,
+  16 тестов). Полный прогон backend — **176/176 зелёных** (было 160 + 16 новых), линт чист,
+  миграция `20260724120000_tenant_isolation_composite_fks.js` обратима (up/down проверены).
+  Коммит — за пользователем.
+- Пункты 2–6 — не начаты.
+
+---
+
+## Сводка
+
+Три сквозные темы, на которых сходятся находки всех четырёх направлений:
+
+1. **Изоляция мультитенантности держится на одной проверке.** Middleware сверяет только
+   `:nurseryId` из URL с JWT; вложенные идентификаторы (plantId, locationId, tagId, stageId,
+   speciesId, containerId, movementTypeId) в ряде мест не привязываются к питомнику ни в
+   сервисах (B1–B7), ни на уровне FK в схеме (D2). С приходом v2 (несколько питомников на
+   аккаунт) это перестало быть теоретическим риском. Тестов изоляции почти нет (T4).
+2. **Офлайн-ядро — главная фишка продукта — фактически не работает.** PWA не открывается
+   офлайн (F3), офлайн-старт падает на роутер-гарде (F4), очередь синхронизации подвержена
+   гонкам и дублям (F1, F2), локальные id не маппятся на серверные (F8), кэш не
+   инвалидируется (F9) и не чистится между аккаунтами (F6). Фронтенд при этом не покрыт ни
+   одним тестом (T1).
+3. **Целостность данных не защищена.** Во всём backend нет ни одной транзакции (B9), лимиты
+   планов пробиваются гонкой (B10), сид безусловно стирает все данные, включая прод (D1),
+   CI отсутствует (T2).
+
+Отдельно: staff-логин не реализован — все реальные JWT имеют роль `owner`, поэтому вся
+RBAC-механика в рантайме пока декоративна (B11).
+
+| Направление | Критично | Важно | Незначительно |
+|---|---|---|---|
+| Backend | 7 | 14 | 15 |
+| Frontend | 4 | 10 | 11 |
+| База данных | 2 | 6 | 8 |
+| Тесты | 4 | 6 | 5 |
+
+---
+
+## 1. Backend
+
+### Критично
+
+- **B1. Кросс-tenant чтение операций (IDOR).** ✅ **Исправлено 2026-07-24** — `getOperations`
+  принимает `nurseryId` и проверяет принадлежность растения через новый `requirePlantInNursery` → 404.
+  `backend/src/services/operation.service.js:12-14` + `backend/src/controllers/operation.controller.js:5` —
+  `getOperations(plantId)` выбирает операции только по `plant_id`, не проверяя, что растение
+  принадлежит питомнику из URL (`requireNurseryAccess` сверяет только `:nurseryId` с JWT).
+  Любой аутентифицированный пользователь читает операции чужого питомника через
+  `/api/nurseries/<свой>/plants/<чужой plantId>/operations`.
+  *Исправление:* `requirePlant(nurseryId, plantId)` в начале, как уже сделано в `createOperation`.
+
+- **B2. Кросс-tenant удаление/изменение операций.** ✅ **Исправлено 2026-07-24** — `updateOperation`
+  и `softDelete` вызывают `requirePlantInNursery(nurseryId, plantId)` до проверки авторства/роли → 404.
+  `backend/src/services/operation.service.js:86-94` — `softDelete` проверяет связь
+  «операция ↔ растение», но не «растение ↔ питомник»; роль `owner` берётся из своего
+  питомника → владелец любого аккаунта удаляет операции чужих растений по plantId+operationId.
+  `updateOperation` (`:77-84`) прикрыт лишь проверкой авторства — тоже без проверки nursery.
+
+- **B3. Кросс-tenant операции с фото.** ✅ **Исправлено 2026-07-24** — `attachPhoto` и `deletePhoto`
+  проверяют принадлежность растения питомнику через `requirePlantInNursery` → 404.
+  `backend/src/services/operation.service.js:109-125` (attachPhoto), `:127-135` (deletePhoto) —
+  та же схема: можно прикреплять и удалять фото у операций чужих питомников.
+
+- **B4. Кросс-tenant чтение движений.** ✅ **Исправлено 2026-07-24** — `getMovements` принимает
+  `nurseryId` и проверяет принадлежность растения через `requirePlantInNursery` → 404.
+  `backend/src/services/movement.service.js:17-19` + `backend/src/controllers/movement.controller.js:5` —
+  `getMovements(plantId)` без проверки принадлежности растения; выборка джойнит имена локаций
+  и пользователей чужого питомника (`movement.repository.js:3-19`) — прямая утечка данных.
+
+- **B5. Кросс-tenant ссылки при создании/изменении растения.** ✅ **Исправлено 2026-07-24** —
+  новый `resolveReferences` в plant.service резолвит `speciesId/locationId/containerId/stageId`
+  через nursery-скоупные репозитории (для контейнеров/стадий — с учётом системных строк);
+  в movement.service добавлен `requireMovementLocations` для `from/toLocationId` → 404.
+  `backend/src/services/plant.service.js:57-69` (create), `:105-116` (update) —
+  `speciesId/locationId/containerId/stageId` вставляются без проверки принадлежности питомнику
+  (FK в схеме тоже не nursery-скоупные, см. D2). Можно привязать растение к сущностям чужого
+  питомника, а `findPage` вернёт их названия. Аналогично `movement.service.js:41-42,47`:
+  `toLocationId` не проверяется, `applyMovementToPlant` (`:72-84`) переставит растение в чужую локацию.
+  *Исправление:* резолвить каждый переданный id через `*Repo.findByNurseryAndId`.
+
+- **B6. Кросс-tenant теги.** ✅ **Исправлено 2026-07-24** — `addTag`/`removeTag` проверяют `tagId`
+  через новый `requireTag` (`tagRepo.findById(nurseryId, tagId)`) → 404.
+  `backend/src/services/plant.service.js:164-173` — `addTag/removeTag` не проверяют
+  принадлежность `tagId` питомнику (`tagRepo.findById(nurseryId, id)` существует, но не
+  вызывается); `getPlantById → getTagsByPlant` вернёт чужое имя/цвет тега.
+
+- **B7. Тип движения без изоляции питомника.** ✅ **Исправлено 2026-07-24** — прямой `db('movement_types')`
+  заменён на `movementTypeRepo.findById(nurseryId, typeId)` (системные + свои, но не чужие), с сохранением
+  проверки `is_active`; SQL из сервиса убран.
+  `backend/src/services/movement.service.js:30-35` — прямой запрос `db('movement_types')`
+  без фильтра `nursery_id IS NULL OR nursery_id = :nurseryId`, хотя
+  `movementTypeRepo.findById(nurseryId, id)` реализован. Можно использовать чужой
+  пользовательский тип движения (включая его `sets_status`). Заодно нарушение слоёв — SQL в сервисе.
+
+### Важно
+
+- **B8. errorHandler отдаёт внутренние сообщения клиенту.**
+  `backend/src/middlewares/errorHandler.js:7-14` — для любых не-AppError клиент получает
+  `err.message` (тексты SQL-ошибок, имена таблиц/констрейнтов). Для 500 возвращать
+  нейтральное сообщение, детали — только в лог.
+
+- **B9. Ни одной транзакции во всём backend.**
+  Многошаговые операции выполняются вне `db.transaction`:
+  `auth.service.js:35-45` (account + subscription — при сбое второго insert аккаунт остаётся
+  без подписки и все planGuards кидают 403), `nursery.service.js:46-56` (nursery + owner-user),
+  `subscription.service.js:23-28` (`cancelActive` уже закоммичен, если `create` упадёт —
+  аккаунт без активной подписки), `operation.service.js:36-65` (update растения +
+  stage_history + операция), `movement.service.js:37-53` (movement + статус/локация растения).
+
+- **B10. Race condition на лимитах плана.**
+  `backend/src/utils/planGuards.js:13-23` + `plant.service.js:52-53, 82-83`,
+  `nursery.service.js:38-39`, `staff.service.js:112-122` — схема «прочитал count → вставил»
+  без транзакции/блокировки: параллельные запросы пробивают plant_limit/user_limit/nursery_limit.
+  *Исправление:* advisory lock или проверка в транзакции с `SELECT ... FOR UPDATE`.
+
+- **B11. RBAC фактически не работает: сотрудники не могут войти.**
+  `backend/src/services/auth.service.js:50-61, 141-154` — логин существует только по таблице
+  `accounts`; `resolveActiveContext` ищет исключительно `role='owner'`
+  (`user.repository.js:12-20`). Staff-пользователи с временными паролями и
+  `must_change_password` не имеют ни одного эндпоинта для входа — все реальные JWT имеют
+  `role='owner'`, вся система `requireRole`/WRITE_ROLES в рантайме мертва. Документация
+  (`backend/documentation/modules/backend-modules.md:90`) описывает фичу как рабочую.
+  *Исправление:* доделать staff-логин либо явно зафиксировать ограничение.
+
+- **B12. Смена тарифного плана без оплаты/проверки.**
+  `backend/src/services/subscription.service.js:17-29` + `subscription.router.js:13` —
+  `POST /api/subscriptions/change` мгновенно переводит аккаунт на любой активный план:
+  бесплатный self-service-апгрейд. Если биллинг вне скоупа MVP — ограничить выбор планов или TODO-гард.
+
+- **B13. Подписка никогда не истекает.**
+  `backend/src/repositories/subscription.repository.js:14-30` — `expires_at` не используется
+  нигде в коде, cron перевода в `expired` отсутствует (единственный cron — очистка
+  activity_logs). Trial бессрочен; тип `SUBSCRIPTION_EXPIRING` (`notification.constants.js:7`)
+  объявлен, но продюсера не имеет.
+
+- **B14. Нет rate limiting (включая /login и /refresh).**
+  `backend/app.js` — ни `express-rate-limit`, ни аналога. Брутфорс по `POST /api/auth/login`
+  ничем не ограничен.
+
+- **B15. PATCH растения затирает непереданные поля.**
+  `backend/src/services/plant.service.js:105-116` — сервис пишет `data.X ?? null` для каждого
+  поля: PATCH только с `notes` обнулит `nursery_species_id`, `location_id`, `stage_id` и т.д.
+  Потеря данных при любом частичном обновлении.
+  *Исправление:* собирать объект update из реально переданных ключей (образец — `location.service.updateLocation`).
+
+- **B16. PATCH операции падает с 500 на валидном входе.**
+  `backend/src/utils/validators/operation.validators.js:12-17` + `operation.service.js:83` —
+  схема разрешает `newContainerId/newStageId`, а сервис передаёт body напрямую в
+  `UPDATE operations`, где таких колонок нет → SQL-ошибка 500. Смена `type` через PATCH не
+  выполняет side-effects (transplant/change_stage).
+
+- **B17. Утечка password_hash в ответах staff API.**
+  `backend/src/repositories/user.repository.js:35-40, 78-84` (`returning('*')`) +
+  `staff.controller.js:29` и далее — создание/обновление сотрудника возвращает клиенту всю
+  строку users, включая Argon2-хэш. Явно перечислить возвращаемые колонки.
+
+- **B18. attachPhoto без валидации входа.**
+  `backend/src/routes/operation.router.js:31` (нет `validate(...)`) — `req.body.url` пишется
+  в БД без Zod: любая длина, любой контент, включая `javascript:`-URI (stored-XSS-вектор для фронта).
+
+- **B19. GBIF-сбой ломает весь поиск видов; fetch без таймаута.**
+  `backend/src/services/dictionary.service.js:22-26` — `Promise.all` с GBIF: при его
+  недоступности весь `/species/search` возвращает 502, хотя локальные результаты есть
+  (нужен `Promise.allSettled`). `gbif.client.js:7-9, 24` — fetch без AbortController/таймаута.
+
+- **B20. Нет graceful shutdown; npm как PID 1.**
+  `backend/server.js` — нет обработчиков SIGTERM/SIGINT, пул Knex не закрывается.
+  `backend/Dockerfile` — `CMD ["npm","run","start"]`: npm не пробрасывает SIGTERM в node →
+  контейнер убивается по таймауту; нет `USER` (root) и `HEALTHCHECK`.
+
+- **B21. Пагинация уведомлений/журнала без валидации и верхней границы.**
+  `backend/src/services/notification.service.js:5-7`, `activityLog.service.js:4-6` —
+  `Number(page)/Number(perPage)` без Zod: `perPage=1000000` выгружает таблицу,
+  `page=abc` → NaN → 500. Ввести схему с `max(100)` (образец — `plantFiltersSchema`).
+
+### Незначительно
+
+- **B22.** `backend/src/routes/nursery.router.js:19, 23-28` — `PATCH /my` и `PATCH /:nurseryId`
+  без `requireRole`; при появлении staff-логина любой observer сможет переименовать питомник.
+- **B23.** `backend/src/services/dictionary.service.js:228-233` — обе ветки
+  `if (used > 0) ... else ...` в `deleteContainerType` идентичны, вызов `countUsedByPlants` бессмыслен.
+- **B24.** `backend/src/services/dictionary.service.js:236-240` — мёртвый код `ensureStructureRole`.
+- **B25.** `backend/src/repositories/subscription.repository.js:27` —
+  `select('subscriptions.*', 'plans.*')`: поля плана перезаписывают поля подписки,
+  `/api/subscriptions/current` возвращает id плана вместо id подписки.
+- **B26.** `backend/src/middlewares/validate.js:3` — валидируется только body; невалидные UUID
+  в `:id`-параметрах дают `22P02` от Postgres и 500 вместо 400.
+- **B27.** `backend/src/services/nursery.service.js:47` — пароль owner-заглушки из
+  `Math.random().toString(36)` — некриптографическая энтропия; использовать `crypto.randomBytes`.
+- **B28.** `backend/src/services/plant.service.js:81-103, 184-194` — в bulk-создании
+  уникальность numeric_code проверяется только по БД, не внутри партии (близкие `Date.now()`
+  → коллизия → 409 на весь батч); нет `logActivity` для bulk.
+- **B29.** `backend/src/config/logger.js:6` — в production уровень `warn` (бизнес-события
+  `info` теряются); `:14-15` — файлы `logs/*` в контейнере не персистентны;
+  `backend/app.js:34-36` — morgan `'dev'` и в проде.
+- **B30.** `backend/src/constants/auth.constants.js:3-7` — refresh-cookie без `path: '/api/auth'`,
+  отправляется на каждый запрос.
+- **B31.** `backend/src/middlewares/requireAuth.js:5-17` — не проверяет `is_active`; после
+  `changeRole`/`toggleStatus` старый access-токен действует до 15 минут.
+- **B32.** `backend/src/routes/plant.router.js:41` (restore), `movement.router.js:21` (delete) —
+  проверка роли спрятана в сервисе, а не в middleware, вразрез с общим паттерном.
+- **B33.** `backend/app.js:53` — маршрут-сирота `GET /api/plans` дублирует
+  `GET /api/subscriptions/plans` мимо роутеров.
+- **B34.** `docker-compose.yml:7-9` — хардкод креденшалов БД + проброс 5433 наружу; вынести в env.
+- **B35.** `backend/src/services/staff.service.js:118` — `checkUserLimit` тянет все строки
+  через `findAllByNursery` вместо count-запроса.
+- **B36.** Устаревшая документация схемы — см. D3 (общая находка с БД).
+
+---
+
+## 2. Frontend
+
+### Критично
+
+- **F1. Гонка в `processQueue` → дублирование записей на сервере.**
+  `frontend/src/composables/useSyncManager.js:23-34` — guard `syncStatus === 'syncing'`
+  проверяется синхронно, но статус выставляется только после `await getPending()`.
+  `useSyncManager()` инстанцируется трижды (`AppLayout.vue:71`, `SyncStatusBadge.vue:55`,
+  `useNurserySwitch.js:10`), каждый вешает свой `watch(isOnline)` — при событии `online` все
+  три проходят guard до установки статуса, читают одну очередь и шлют одни и те же
+  `create_operation`/`create_movement` — дубли на сервере.
+  *Исправление:* выставлять `syncStatus = 'syncing'` синхронно до первого `await` (или
+  модульный promise-mutex); watcher регистрировать один раз на модуль.
+
+- **F2. Обрыв сети посреди запроса → дубль операции.**
+  `frontend/src/composables/useSyncManager.js:71-89` — если POST дошёл до сервера, но ответ
+  потерялся, `catch` → `markFailed` → элемент остаётся pending → повторная отправка создаёт
+  вторую запись. Идемпотентного ключа в payload нет.
+  *Исправление:* клиентский UUID при постановке в очередь + дедупликация на бэкенде.
+
+- **F3. PWA не загружается офлайн: нет precache app shell.**
+  `frontend/public/sw.js:8-13` — кэшируются только `script/style/image/font`; навигационные
+  запросы не обрабатываются, precache-манифеста нет — после перезапуска браузера офлайн
+  `index.html` взять неоткуда, приложение не открывается вовсе. Вдобавок `sw.js:2` тянет
+  Workbox с CDN (без сети SW не установится), а пакеты `workbox-routing`/`workbox-strategies`
+  из `package.json` не используются (мёртвые зависимости).
+  *Исправление:* `vite-plugin-pwa`/injectManifest с precache бандлов и NavigationRoute-фолбэком,
+  workbox бандлить локально.
+
+- **F4. Офлайн-старт приложения ломается на роутер-гарде.**
+  Две ветки, обе фатальны:
+  (а) `frontend/src/stores/nursery.store.js:143-157` — `initNurseryContext` делает
+  `Promise.all` из трёх fetch без `catch`; исключение вылетает из `router.beforeEach`
+  (`router/index.js:161, 188-199`) — пустой экран; при повторной навигации
+  `isInitialized === true`, `nursery === null` → ложный редирект на `/nursery/create`.
+  Активный питомник офлайн нигде не кэшируется.
+  (б) `frontend/src/stores/auth.store.js:187-191` — `initAuth` не различает 401 и сетевую
+  ошибку: офлайн-сбой `/auth/refresh` → `clearSession()` → редирект на `/login`.
+  *Исправление:* офлайн-фолбэк контекста питомника из IndexedDB/localStorage; чистить сессию
+  только при `status === 401`.
+
+### Важно
+
+- **F5. Logout стирает несинхронизированную очередь без предупреждения.**
+  `frontend/src/stores/auth.store.js:138-149` — `logout()` вызывает `clearDomainTables()`,
+  а `DOMAIN_TABLES` (`db/indexedDb.js:37-53`) включает `sync_queue` и `pending_photos`.
+  Гарда, аналогичного `ensureCanSwitch`, нет — офлайн-работа теряется молча.
+
+- **F6. Кросс-аккаунтная утечка кэша при истечении сессии.**
+  `frontend/src/services/http.js:29-40` — по невалидному refresh вызывается
+  `clearSession()` (`auth.store.js:227-232`), который не чистит IndexedDB и SW-кэш:
+  следующий пользователь браузера офлайн увидит чужие растения, а чужая `sync_queue` уйдёт
+  под его сессией (см. F7). Кэш `api-v1` (`public/sw.js:15-20`) не чистится даже при обычном
+  logout. *Исправление:* чистить Dexie и `caches.delete('api-v1')` в `clearSession`/logout.
+
+- **F7. Очередь синхронизации не привязана к nurseryId.**
+  `frontend/src/composables/useSyncManager.js:66-67, 104-105` — `nurseryId` берётся из стора
+  в момент отправки, а не фиксируется при постановке в очередь (`operations.store.js:115`,
+  `movements.store.js:99`). Активный питомник хранится на сервере: если его переключили с
+  другого устройства, очередь после перезапуска уйдёт в чужой питомник.
+  *Исправление:* сохранять `nurseryId` в payload при `addToQueue`.
+
+- **F8. `local_` id офлайн-записей никогда не заменяются серверными.**
+  `frontend/src/stores/operations.store.js:90-104`, `movements.store.js:81-98` — после
+  успешного синка локальная запись не удаляется → дубль при следующем офлайн-просмотре;
+  редактирование/удаление офлайн-созданной записи ставит в очередь `local_...` id
+  (`operations.store.js:147, 173`) → PATCH/DELETE с несуществующим id гарантированно упадёт.
+  *Исправление:* маппинг local→server id при обработке `create_*` с обновлением Dexie и
+  последующих элементов очереди.
+
+- **F9. «Сервер побеждает» не работает для удалений: кэш растений не инвалидируется.**
+  `frontend/src/stores/plants.store.js:96-98` — `fetchPlants` делает `bulkPut` поверх кэша,
+  ничего не удаляя: удалённые на сервере растения живут в IndexedDB вечно; `softDelete`
+  (строки 190-191) не трогает Dexie — офлайн растение «воскресает». Корректный паттерн есть
+  в `productionStages.store.js:31-32` (`clearTable` + `upsert`).
+
+- **F10. Успешная смена пароля показывается как ошибка.**
+  `frontend/src/stores/auth.store.js:205-210` — при успехе action делает `return` без
+  значения; `ChangePasswordPage.vue:73-77` проверяет `if (!result?.ok)` → пользователь видит
+  «Не удалось обновить пароль», хотя пароль сменён. *Исправление:* `return { ok: true }`.
+
+- **F11. Справочники не читаются из кэша офлайн — `loadFromLocal` мёртв в 6 сторах.**
+  `PlantsPage.vue:130-144`, `PlantDetailPage.vue:137-158` — офлайн fetch-методы возвращают
+  `{ok:false}` и списки пусты; `loadFromLocal` в `species.store.js:41`, `locations.store.js:44`,
+  `tags.store.js:39`, `containerTypes.store.js:44`, `movementTypes.store.js:41`,
+  `productionStages.store.js:42` не вызываются нигде. Офлайн пропадают фильтры и названия
+  локаций/стадий/типов.
+
+- **F12. Сканер: необработанные исключения и зависший спиннер.**
+  `frontend/src/stores/plants.store.js:259-262, 276-279` — онлайн-ветки `findByQr/findByNumericCode`
+  не ловят ошибки HTTP; `ScannerPage.vue:82-98` — при исключении `isSearching.value = false`
+  не выполняется: кнопка навсегда в loading; в `handleScanned` (58-68) — unhandled rejection.
+
+- **F13. Фича фото недоделана, синк фото теряет данные by design.**
+  `operations.store.js:222-236` — `syncPending` помечает pending-фото done, ничего не
+  отправляя; `attachPhoto` (183-204) не вызывается ни из одного компонента;
+  `pendingPhotos.service.js:3-13` кладёт `File` в поле `blob`, а `useSyncManager.js:119-122`
+  шлёт `{ url: pending.blob }` — `File` сериализуется в `{}`. Пустые заглушки `syncPending`
+  в `plants.store.js:313-315` и `movements.store.js:131-133`.
+  *Исправление:* удалить или доделать (Blob + FormData либо base64).
+
+- **F14. Обновление версии PWA: `skipWaiting` без перезагрузки клиентов.**
+  `frontend/public/sw.js:5-6` + `registerServiceWorker.js:53-55` — новый SW мгновенно
+  перехватывает клиентов, но `controllerchange` только логирует: старое приложение работает
+  с новым кэшем (возможны падения ленивых чанков), подсказки «доступна новая версия» нет.
+
+### Незначительно
+
+- **F15.** `frontend/public/sw.js:10-12` — `CacheFirst 'static-v1'` без ExpirationPlugin:
+  бандлы старых деплоев копятся бессрочно.
+- **F16.** `frontend/src/composables/useOnlineStatus.js:14-22` — вызывается внутри actions
+  Pinia (`plants.store.js:252`, `operations.store.js:51`, `movements.store.js:50`):
+  `onMounted` вне setup не сработает, `isOnline` там — разовый снапшот `navigator.onLine`.
+- **F17.** `frontend/src/stores/movements.store.js:109-129` — `deleteMovement` без
+  офлайн-ветки, хотя `delete_movement` объявлен и обрабатывается в syncManager; офлайн-ветка
+  `createMovement` не применяет `applyMovementToPlant` — статус/локация растения офлайн не
+  обновляются; `localOperation` (`operations.store.js:90-97`) теряет поля formData.
+- **F18.** `frontend/src/services/syncQueue.service.js` — файл-обёртка целиком мёртвый код
+  (никем не импортируется); статусы `PROCESSING/DONE` из `constants/syncQueue.constants.js:12-14`
+  не используются. Дублирует имя с `db/syncQueue.service.js` — риск рассинхронизации (см. T15).
+- **F19.** `frontend/src/stores/auth.store.js:36-37, 81-96` — токенный код мёртв
+  (аутентификация cookie-based), при этом refresh-токен хранился бы в localStorage —
+  удалить вместе с Authorization-веткой `http.js:50-52`.
+- **F20.** `frontend/src/stores/notifications.store.js:84-86` — поллинг каждые 60 с
+  продолжается офлайн; `state.error` нигде не отображается.
+- **F21.** `frontend/src/pages/scanner/components/QrScanner.vue:41-60` — при размонтировании
+  до резолва `decodeFromVideoDevice` стрим камеры утекает; `props.active` без `watch`.
+- **F22.** `frontend/src/stores/nursery.store.js:158-165` — `resetState` не сбрасывает `nurseryError`.
+- **F23.** `frontend/src/pages/catalog/CatalogPage.vue` — 532 строки, крупнейший компонент
+  (4 секции справочников инлайн); `LocationsPage.vue` — 407 строк.
+- **F24.** `PlantsPage.vue:27-37` + `plants.store.js:32-74` — DataTable в режиме `lazy`
+  получает `:value="plantsStore.filtered"`: клиентский getter повторно фильтрует серверную
+  страницу, `totalRecords` может не совпадать с числом строк.
+- **F25.** `AppLayout.vue:87-96` — мёртвые пункты меню с `visible: false`, продублированные
+  в админ-секции; `main.js:45` — `http.get('/health').catch(() => {})` с проглоченной ошибкой.
+
+---
+
+## 3. База данных
+
+### Критично
+
+- **D1. Сид безусловно стирает все данные — включая продовые.**
+  `backend/db/seeds/001_mvp_seed.js:7-14` — `del()` по `subscriptions`, `users`, `nurseries`,
+  `accounts`, `plans`, `movement_types`, `container_types`, `production_stages` выполняется
+  без проверки окружения; гард `NODE_ENV !== 'production'` (строка 60) прикрывает только
+  вставку демо-аккаунта. Сид при этом содержит производственные справочники (план `free`,
+  системные типы), т.е. предназначен для прода. Запуск в prod удалит все аккаунты и каскадом —
+  данные всех tenant'ов. Побочно: `movement_types.del()` упадёт с FK-ошибкой на любой БД с
+  движениями. *Исправление:* справочники — идемпотентным upsert'ом (`onConflict().merge()`)
+  без `del()`; демо-данные — в отдельный dev-only сид.
+
+- **D2. FK не обеспечивают изоляцию между питомниками.** ✅ **Исправлено частично 2026-07-24** —
+  миграция `20260724120000_tenant_isolation_composite_fks.js` перевела `plants.location_id` и
+  `plants.nursery_species_id` на составные FK `(…, nursery_id) → parent(id, nursery_id)` с
+  `UNIQUE(id, nursery_id)` на родителях и `ON DELETE SET NULL (col)` (PG15+). `container_id`/`stage_id`
+  на composite FK не переводятся намеренно (системные строки с `nursery_id IS NULL`) — их изоляцию
+  держит сервисный слой (B5). FK подтверждены в БД, миграция обратима.
+  `backend/db/migrations/20260614140000_create_production_stages.js:26` (`plants.stage_id`),
+  `20260409110000_refactor_species_to_global_catalog.js:36-42` (`plants.nursery_species_id`),
+  `20260408073000_init_mvp_schema.js:149-150` (`plants.location_id`, `plants.container_id`) —
+  FK ссылаются только на `id` родителя, не требуя совпадения `nursery_id`; сервис
+  принадлежность тоже не проверяет (см. B5). Схема — последний рубеж изоляции, и он отсутствует.
+  *Исправление:* составные FK `(nursery_id, location_id) REFERENCES locations(id, nursery_id)`
+  (с `UNIQUE(id, nursery_id)` на родителях; для `stage_id` — с учётом системных NULL-строк)
+  и/или обязательная валидация в сервисе.
+
+### Важно
+
+- **D3. schema.sql устарел — весь v2 в нём отсутствует.**
+  `backend/documentation/schema.sql:3` (версия «MVP v0.8») — нет таблиц `notifications`,
+  `production_stages`, `plant_stage_history`, `stage_labor_norms`, колонок `plants.stage_id`,
+  `accounts.last_active_nursery_id`, значения `change_stage` в CHECK операций.
+  Закомментированный сид (`schema.sql:403-405`) расходится с фактическим
+  (`001_mvp_seed.js:48-50`: `TRENCH/COLD_STORAGE/GREENHOUSE`).
+  *Исправление:* перегенерировать из фактической БД (`pg_dump --schema-only`).
+
+- **D4. Справочные данные разъехались между миграциями и сидами.**
+  `20260614140000_create_production_stages.js:1-6, 54-56` — системные стадии зашиты в
+  миграцию, тогда как системные `movement_types`/`container_types` существуют только в сиде.
+  Свежая БД «только миграции» получает стадии, но не типы движений — `arrival/sale/write_off`
+  неработоспособны. Плюс дублирование 4 стадий в миграции и сиде.
+  *Исправление:* один механизм провижининга системных справочников (идемпотентный сид) для всех трёх таблиц.
+
+- **D5. Системные строки справочников не защищены UNIQUE из-за NULL.**
+  `20260614140000:14, 22` — `nursery_id` nullable + `UNIQUE(nursery_id, slug)`: в PostgreSQL
+  NULL'ы в unique различны, системные строки можно дублировать. То же у `movement_types`
+  (init:121) и `container_types` (init:139).
+  *Исправление:* partial unique `... WHERE nursery_id IS NULL` либо `UNIQUE NULLS NOT DISTINCT` (PG15+).
+
+- **D6. Горячие запросы не покрыты композитными индексами.**
+  Реестр растений (`plant.repository.js:52-74`): `WHERE nursery_id AND deleted_at IS NULL
+  ORDER BY created_at DESC, id` — есть только `idx_plants_active(nursery_id)` (init:227),
+  нужен `(nursery_id, created_at DESC, id) WHERE deleted_at IS NULL`.
+  Лента активности (`activityLog.repository.js:7-26`): индексы раздельные (init:248, 251),
+  нужен `(nursery_id, created_at DESC)`.
+  Уведомления (`notification.repository.js:19-27`): `idx_notifications_user(nursery_id, user_id)`
+  без `created_at`; `idx_notifications_created_at` не используется ни одним запросом,
+  нужен `(nursery_id, user_id, created_at DESC)`.
+
+- **D7. notifications нарушает заявленные принципы схемы.**
+  `20260614130000_create_notifications.js:5-13` — таблица мутируемая (`is_read`), но
+  `updated_at` отсутствует; `type` — свободный текст без CHECK, хотя у всех остальных таблиц
+  CHECK-и есть.
+
+- **D8. Глобальная уникальность numeric_code/qr_code не адаптирована к мультитенантности.**
+  `20260408073000:151-152` — `UNIQUE(qr_code)`/`UNIQUE(numeric_code)` глобальные;
+  8-значный код генерируется из `Date.now()` (`plant.service.js:184-194`) в общем на всех
+  tenant'ов пространстве: коды конкурируют между питомниками, вероятность коллизий растёт с
+  числом клиентов, после 10 неудач — HTTP 500. Изоляция чтения держится на app-проверке
+  после глобального поиска (`plant.repository.js:107-113`).
+  *Исправление:* для v2 — составной unique `(nursery_id, numeric_code)` + скоуп поиска в репозитории.
+
+### Незначительно
+
+- **D9. Дублирующие/избыточные индексы** (лишняя запись при INSERT/UPDATE в самой горячей таблице):
+  `init:225-226` (`idx_plants_qr`, `idx_plants_numeric_code` дублируют UNIQUE);
+  `init:223` (`idx_plants_nursery` перекрыт `idx_plants_active`);
+  `init:243` (`idx_plant_tags_plant` дублирует префикс PK);
+  `20260409110000:118` (дублирует `unique('gbif_usage_key')`);
+  одиночные индексы по `nursery_id`, дублирующие префикс составных unique: `init:232, 236`,
+  `20260614140000:49, 52`, `20260409110000:122`;
+  `init:246` (`idx_users_role` — низкая кардинальность, запросов по нему нет).
+- **D10. FK-колонки с ON DELETE-политикой без индекса** — `subscriptions.plan_id` (init:36),
+  `operations.user_id` (init:178), `movements.user_id/from_location_id/to_location_id`
+  (init:199-202), `plant_stage_history.stage_id/changed_by` (20260614140000:32-33),
+  `accounts.last_active_nursery_id` (20260614120000:4-8). Для operations/movements стоит добавить.
+- **D11. Отсутствующие UNIQUE в пределах питомника** — `tags` без `UNIQUE(nursery_id, name)`
+  (init:100-109); `users` без `UNIQUE(nursery_id, email)` (init:63).
+- **D12. Нет partial-unique «одна активная подписка на аккаунт»** — `idx_subscriptions_active`
+  (init:240-242) не UNIQUE; БД допускает две строки `active` на аккаунт.
+- **D13. stage_labor_norms без CHECK** — `norm_minutes` без `CHECK (> 0)`, `operation_type`
+  без CHECK по списку (20260614140000:42-43).
+- **D14. down-миграция сломается на данных** — `20260614150000:14-19` повторно вешает узкий
+  CHECK; при наличии строк `type='change_stage'` ALTER упадёт.
+- **D15. accounts.last_active_nursery_id без проверки принадлежности** (20260614120000:2-9) —
+  на уровне БД может указывать на питомник чужого аккаунта.
+- **D16. locations.parent_id ON DELETE SET NULL** (init:76) — удаление участка молча делает
+  его секции/ряды корневыми; RESTRICT безопаснее для иерархии.
+
+---
+
+## 4. Тестовое покрытие
+
+Факты: backend/tests — 21 файл, **160 тестов** (не 130, как в README); все 13 роутеров имеют
+тестовые файлы, непокрытых эндпоинтов не выявлено; изоляция per-test образцовая
+(`tests/setup.js` чистит аккаунты в `beforeEach`, фикстуры через `helpers.js`).
+
+### Критично
+
+- **T1. Frontend — полное отсутствие тестов и тестовой инфраструктуры.**
+  В `frontend/package.json` нет ни test-скрипта, ни vitest/jest; ни одного `*.test.*`/`*.spec.*`
+  файла. Самая сложная логика продукта (offline-first) не защищена вообще. Первые кандидаты:
+  `composables/useSyncManager.js` (процессинг очереди, ретраи), `db/syncQueue.service.js`
+  (Dexie-очередь), `composables/useNurserySwitch.js` (гард переключения — защита от потери
+  данных), `stores/auth.store.js`, `stores/plants.store.js`, `db/indexedDb.js` (схема/версии).
+  *Исправление:* vitest + @vue/test-utils + fake-indexeddb, начать с чистых юнитов очереди и гарда.
+
+- **T2. Отсутствие CI.**
+  Каталога `.github/` (и любого CI-конфига) нет. Пороги покрытия в `backend/vitest.config.js`
+  (90/80) нигде автоматически не проверяются; `npm test` гоняет тесты без coverage.
+  *Исправление:* GitHub Actions с сервис-контейнером Postgres: lint + `vitest run --coverage`
+  для backend, build + lint для frontend.
+
+- **T3. acceptance-check.mjs не знает о v2.**
+  `backend/scripts/acceptance-check.mjs` — 81 `check()` строго по модулям M2–M13; ни одного
+  упоминания notifications, production stages, switch, мульти-питомников. В CI не включён.
+  «Приёмка» зелёная при сломанной v2-функциональности.
+
+- **T4. Один-единственный тест на изоляцию мульти-питомников.** ✅ **Исправлено 2026-07-24** —
+  добавлен `backend/tests/tenantIsolation.test.js` (16 тестов): полная матрица B1–B7 (кросс-аккаунтный
+  вектор), позитивный контроль (системные контейнер/стадия/тип движения не блокируются) и
+  same-account v2-сценарий (два питомника на аккаунте + switch, изоляция списков и операций).
+  `backend/tests/multiNurseryRoles.test.js` проверяет только «сотрудник A отсутствует в
+  списке B» и раздельные owner-строки. Нет негативов per-nursery ролей (staff питомника A →
+  `POST /:nurseryId/switch` чужого, прямые запросы к ресурсам питомника B того же аккаунта,
+  JWT со старой ролью после смены роли). Изоляция данных между питомниками одного аккаунта
+  проверена только для стадий/норм и уведомлений — для plants/locations/movements/activity
+  таких тестов нет; вся изоляция держится на одном сравнении в `requireNurseryAccess.js`
+  (а B1–B7 показывают, что вложенные id этим не покрыты).
+
+### Важно
+
+- **T5. Нет тестов конкурентности.** `Promise.all` не встречается ни в одном тестовом файле;
+  гонка «два параллельных POST при остатке 1 до лимита» не проверена — checkLimit подвержен
+  TOCTOU (см. B10). *Исправление:* тест с `Promise.all` из двух запросов, ожидание ровно одного 201.
+- **T6. Офлайн-синхронизация не тестируется на стороне API.** Нет тестов повторной доставки
+  (идемпотентность replay POST из очереди — см. F2) и конфликта устаревшего PATCH. Для
+  offline-first продукта это ядро корректности.
+- **T7. Слабые/толерантные assertions.** 27 мест вида `expect([200, 204]).toContain(...)`
+  (dictionary.test.js, plants.test.js, operations.test.js и др.). Худшее —
+  productionStages.test.js: `expect(dup.status).toBeGreaterThanOrEqual(400)` принимает и 500,
+  маскируя немаппированную unique-ошибку (должен быть 409 через маппинг 23505).
+- **T8. Staff-аутентификация в тестах подделывается.** `helpers.js` подписывает JWT напрямую
+  через `signAccess`, минуя логин (сам комментарий признаёт «staff не логинятся через API» —
+  см. B11). Сценарий «staff логинится → обязан сменить пароль → работает» не проходится нигде.
+- **T9. Хрупкость tests/globalSetup.js.** Для `CREATE DATABASE palisad_test` подключается к
+  основной БД (`DB_NAME || 'palisad'`) — падает невнятно при неполном .env; валидации env нет.
+  `fileParallelism: false` — сюита строго последовательная.
+- **T10. GBIF-мок — риск дрейфа контракта.** Интеграционные тесты мокают весь
+  `gbif.client.js`, юнит мокает `global.fetch` рукописными фикстурами; реальная форма ответов
+  GBIF нигде не сверяется. *Исправление:* contract-тест по расписанию или снапшоты реальных ответов.
+
+### Незначительно
+
+- **T11.** README.md устарел: «130 тестов» при фактических 160; цифры покрытия записаны до
+  трёх v2-этапов.
+- **T12.** `backend/src/utils/cleanupCron.js` исключён из coverage (vitest.config.js) —
+  cron-обвязка не тестируется никак (сервисная функция очистки покрыта).
+- **T13.** RBAC-матрица неполная: выборочные негативы есть, но не «каждая роль × каждый
+  эндпоинт»; для notifications role-негативов нет; worker-негатив в dictionary спрятан в
+  двусмысленном `[400, 403]`. *Исправление:* табличный `it.each` по матрице.
+- **T14.** auth.test.js — 0 обращений к `res.body`: не проверяется отсутствие
+  `password_hash` в ответах (актуально — см. B17); нет тестов reuse refresh-токена после
+  logout и истёкшего access-токена.
+- **T15.** Два одноимённых файла очереди — `frontend/src/services/syncQueue.service.js`
+  (мёртвый shim) и `frontend/src/db/syncQueue.service.js` — без единого теста; при
+  рефакторинге легко рассинхронизировать (см. F18).
+
+---
+
+## Предлагаемый порядок исправления (на утверждение)
+
+1. ✅ **ВЫПОЛНЕНО 2026-07-24. Изоляция tenant'ов (до любого релиза v2):** B1–B7 + тест-матрица
+   изоляции T4; затем схемный рубеж D2. Это связанный пакет: правки в 3 сервисах + негативные тесты.
+   Итог: 176/176 тестов зелёные, линт чист, миграция обратима.
+2. **Защита данных при эксплуатации:** D1 (сид), B9 (транзакции), B10+T5 (лимиты под
+   конкуренцией), B15 (PATCH затирает поля), B17 (утечка password_hash), B8 (errorHandler).
+3. **Офлайн-ядро:** F1–F4 (гонки, дубли, офлайн-старт, precache) + F7–F9; параллельно T1
+   (первые фронтенд-тесты именно на эту логику) и B-сторона идемпотентности (F2/T6).
+4. **Инфраструктура качества:** T2 (CI), T3 (acceptance для v2), T7 (ужесточить assertions),
+   D3 (schema.sql).
+5. **Продуктовые решения:** B11 (staff-логин — доделать или зафиксировать), B12/B13
+   (биллинг/истечение подписок), F13 (фича фото — доделать или вырезать).
+6. Остальное («Важно» и «Незначительно») — фоном, по мере касания соответствующих файлов.
