@@ -32,7 +32,8 @@ app.use(
   })
 );
 if (process.env.NODE_ENV !== 'test') {
-  app.use(morgan('dev'));
+  // B29: в проде — стандартный combined (парсится агрегаторами), в dev — цветной dev.
+  app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 }
 app.use(express.json());
 app.use(cookieParser());

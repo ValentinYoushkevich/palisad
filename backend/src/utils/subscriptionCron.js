@@ -7,9 +7,10 @@ import * as subscriptionService from '@/services/subscription.service.js';
 // в subscription.service (expireOverdue/notifyExpiring) и покрыта тестами; здесь
 // только расписание, поэтому файл исключён из coverage (vitest.config.js).
 // Ежедневно в 03:10 (после cleanup-крона в 03:00): сначала downgrade просроченных
-// на free, затем рассылка предупреждений об истечении.
+// на free, затем рассылка предупреждений об истечении. Возвращает ScheduledTask —
+// server.js останавливает его при graceful shutdown (B20).
 export function startSubscriptionCron() {
-  cron.schedule('10 3 * * *', async () => {
+  return cron.schedule('10 3 * * *', async () => {
     try {
       const { expired, downgraded } = await subscriptionService.expireOverdue();
       const { notified } = await subscriptionService.notifyExpiring();

@@ -130,8 +130,7 @@ export async function bulkCreate({ nurseryId, accountId, userId, template, count
     return plantRepo.bulkCreate(records, trx);
   });
 
-  // B28: bulk раньше не писал activity. Логируем каждое растение по образцу createPlant,
-  // с атрибуцией автора (userId); logActivity — best-effort, ответ не уронит.
+  // B28: логируем каждое растение по образцу createPlant, с автором (userId); best-effort.
   for (const plant of plants) {
     await logActivity({
       nurseryId,
@@ -293,8 +292,7 @@ async function generateUniqueNumericCode(nurseryId, reserved = null) {
     if (reserved?.has(code)) {
       continue;
     }
-    const existing = await plantRepo.findByNumericCode(nurseryId, code);
-    if (!existing) {
+    if (!(await plantRepo.findByNumericCode(nurseryId, code))) {
       return code;
     }
   }

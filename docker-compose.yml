@@ -3,16 +3,19 @@ services:
     image: postgres:16-alpine
     container_name: palisad_db
     restart: unless-stopped
+    # B34: креденшалы приходят из окружения (корневой .env рядом с этим файлом или
+    # переменные среды). Пароль обязателен — без него compose не стартует.
     environment:
-      POSTGRES_DB: palisad
-      POSTGRES_USER: palisad_user
-      POSTGRES_PASSWORD: palisad_pass
+      POSTGRES_DB: ${DB_NAME:-palisad}
+      POSTGRES_USER: ${DB_USER:-palisad_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD не задан — создайте .env рядом с docker-compose.yml}
     ports:
-      - "5433:5432"
+      # B34: только loopback хоста — БД не светится в сеть
+      - "127.0.0.1:${DB_PORT_EXTERNAL:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U palisad_user -d palisad"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-palisad_user} -d ${DB_NAME:-palisad}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -31,7 +34,7 @@ services:
     environment:
       DB_HOST: postgres
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
 
 volumes:
   postgres_data:
