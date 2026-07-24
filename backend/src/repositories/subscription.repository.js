@@ -26,12 +26,20 @@ export function getActive(accountId) {
     .first();
 }
 
+// B25: раньше select('subscriptions.*', 'plans.*') — плановые колонки шли ПОСЛЕ и затирали
+// одноимённые колонки подписки (id, created_at, updated_at), из-за чего GET
+// /subscriptions/current возвращал id ПЛАНА вместо id подписки. Ставим plans.* ПЕРВЫМ, а
+// subscriptions.* — ПОСЛЕДНИМ: на коллизиях (id/created_at/updated_at) побеждают поля
+// подписки (последний столбец в SELECT перекрывает одноимённый в объекте-строке), а
+// плановые поля (slug, name, plant_limit, feature_*) сохраняют РОДНЫЕ имена — на них
+// опираются planGuards, staff.service, фронт и acceptance-check. Идентичность плана также
+// доступна как subscriptions.plan_id.
 export function getActiveWithPlan(accountId, executor = db) {
   return executor('subscriptions')
     .join('plans', 'subscriptions.plan_id', 'plans.id')
     .where('subscriptions.account_id', accountId)
     .whereIn('subscriptions.status', ['trial', 'active'])
-    .select('subscriptions.*', 'plans.*')
+    .select('plans.*', 'subscriptions.*')
     .orderBy('subscriptions.created_at', 'desc')
     .first();
 }

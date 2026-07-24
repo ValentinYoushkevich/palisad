@@ -33,6 +33,16 @@ describe('M11 — Движения', () => {
     expect(updatedPlant.location_id).toBe(section.id);
   });
 
+  // B32: гейт роли на DELETE движения — в middleware (worker вне STRUCTURE_ROLES → 403).
+  it('worker не может удалить движение → 403, agronomist может', async () => {
+    const created = await api().post(mvBase).set('Cookie', ctx.cookie).send({ typeId: transfer.id, toLocationId: section.id });
+    expect(created.status).toBe(201);
+    const denied = await api().delete(`${mvBase}/${created.body.id}`).set('Cookie', ctx.worker.cookie);
+    expect(denied.status).toBe(403);
+    const ok = await api().delete(`${mvBase}/${created.body.id}`).set('Cookie', ctx.agronomist.cookie);
+    expect(ok.status).toBe(204);
+  });
+
   it('sets_status меняет статус растения (sale → sold)', async () => {
     await api().post(mvBase).set('Cookie', ctx.cookie).send({ typeId: sale.id });
     const sold = await db('plants').where({ id: plant.id }).first();

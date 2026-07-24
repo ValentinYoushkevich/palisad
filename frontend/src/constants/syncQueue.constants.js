@@ -9,9 +9,7 @@ export const SYNC_QUEUE_TYPES = {
 
 export const SYNC_QUEUE_STATUSES = {
   PENDING: 'pending',
-  PROCESSING: 'processing',
-  FAILED: 'failed',
-  DONE: 'done'
+  FAILED: 'failed'
 }
 
 export const ALLOWED_SYNC_QUEUE_TYPES = Object.values(SYNC_QUEUE_TYPES)

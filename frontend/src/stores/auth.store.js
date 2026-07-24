@@ -6,8 +6,6 @@ import { useNotificationsStore } from '@/stores/notifications.store'
 import { clearCachedNurseryContext, useNurseryStore } from '@/stores/nursery.store'
 import { defineStore } from 'pinia'
 
-const ACCESS_TOKEN_KEY = 'accessToken'
-const REFRESH_TOKEN_KEY = 'refreshToken'
 const USER_KEY = 'authUser'
 
 const ROLE_OWNER = 'owner'
@@ -35,8 +33,6 @@ function parseStoredUser() {
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    accessToken: localStorage.getItem(ACCESS_TOKEN_KEY) || '',
-    refreshToken: localStorage.getItem(REFRESH_TOKEN_KEY) || '',
     user: parseStoredUser(),
     authError: '',
     isLoading: false,
@@ -44,7 +40,6 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isAuthenticated: (state) => Boolean(state.user),
-    isAuthorized: (state) => Boolean(state.accessToken),
     role: (state) => state.user?.role || '',
     mustChangePassword: (state) => Boolean(state.user?.mustChangePassword || state.user?.must_change_password),
     isOwner: (state) => state.user?.role === ROLE_OWNER,
@@ -79,25 +74,6 @@ export const useAuthStore = defineStore('auth', {
       } else {
         localStorage.removeItem(USER_KEY)
       }
-    },
-    setTokens(accessToken, refreshToken) {
-      this.accessToken = accessToken || ''
-      this.refreshToken = refreshToken || ''
-
-      if (this.accessToken) {
-        localStorage.setItem(ACCESS_TOKEN_KEY, this.accessToken)
-      } else {
-        localStorage.removeItem(ACCESS_TOKEN_KEY)
-      }
-
-      if (this.refreshToken) {
-        localStorage.setItem(REFRESH_TOKEN_KEY, this.refreshToken)
-      } else {
-        localStorage.removeItem(REFRESH_TOKEN_KEY)
-      }
-    },
-    clearTokens() {
-      this.setTokens('', '')
     },
     async login(email, password) {
       this.isLoading = true
@@ -252,7 +228,6 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async clearSession() {
-      this.clearTokens()
       this.setUser(null)
       // Чистим офлайн-кэш контекста питомника, чтобы он не протёк на следующего
       // пользователя того же браузера при истечении сессии (не только при явном logout).

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { STRUCTURE_ROLES, WRITE_ROLES } from '@/constants/roles.constants.js';
+import { ROLES, STRUCTURE_ROLES, WRITE_ROLES } from '@/constants/roles.constants.js';
 import * as plantController from '@/controllers/plant.controller.js';
 import { requireAuth } from '@/middlewares/requireAuth.js';
 import { requireNurseryAccess } from '@/middlewares/requireNurseryAccess.js';
@@ -38,7 +38,8 @@ router.patch(
   plantController.updatePlant
 );
 router.delete('/:id', requireRole(...STRUCTURE_ROLES), plantController.softDelete);
-router.patch('/:id/restore', plantController.restore);
+// B32: гейт роли — в middleware, как у остальных маршрутов (restore в сервисе owner-only).
+router.patch('/:id/restore', requireRole(ROLES.OWNER), plantController.restore);
 router.post('/:id/tags/:tagId', requireRole(...WRITE_ROLES), plantController.addTag);
 router.delete(
   '/:id/tags/:tagId',

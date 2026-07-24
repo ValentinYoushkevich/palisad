@@ -1,4 +1,4 @@
-import { useOnlineStatus } from '@/composables/useOnlineStatus'
+import { isOnline } from '@/composables/useOnlineStatus'
 import { clearTable, upsertMany } from '@/db/dbUtils'
 import db from '@/db/indexedDb'
 import http from '@/services/http'
@@ -263,7 +263,6 @@ export const usePlantsStore = defineStore('plants', {
     },
 
     async findByQr(qrCode) {
-      const { isOnline } = useOnlineStatus()
       const local = this.byQr(qrCode)
 
       if (local) {
@@ -291,7 +290,6 @@ export const usePlantsStore = defineStore('plants', {
     },
 
     async findByNumericCode(code) {
-      const { isOnline } = useOnlineStatus()
       const local = this.byNumericCode(code)
 
       if (local) {

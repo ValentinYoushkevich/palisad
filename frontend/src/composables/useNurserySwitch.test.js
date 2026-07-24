@@ -20,6 +20,8 @@ import http from '@/services/http'
 
 function setOnline(value) {
   Object.defineProperty(navigator, 'onLine', { value, configurable: true })
+  // Синглтон онлайн-статуса (F16) событийный — диспатчим online/offline, как реальный браузер.
+  window.dispatchEvent(new Event(value ? 'online' : 'offline'))
 }
 
 describe('useNurserySwitch — гард переключения питомника', () => {

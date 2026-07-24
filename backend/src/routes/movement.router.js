@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { WRITE_ROLES } from '@/constants/roles.constants.js';
+import { STRUCTURE_ROLES, WRITE_ROLES } from '@/constants/roles.constants.js';
 import * as movementController from '@/controllers/movement.controller.js';
 import { requireAuth } from '@/middlewares/requireAuth.js';
 import { requireNurseryAccess } from '@/middlewares/requireNurseryAccess.js';
@@ -18,6 +18,7 @@ router.post(
   validate(createMovementSchema),
   movementController.createMovement
 );
-router.delete('/:id', movementController.deleteMovement);
+// B32: гейт роли — в middleware (deleteMovement в сервисе требует STRUCTURE_ROLES).
+router.delete('/:id', requireRole(...STRUCTURE_ROLES), movementController.deleteMovement);
 
 export default router;

@@ -1,7 +1,8 @@
-import { useOnlineStatus } from '@/composables/useOnlineStatus'
+import { isOnline } from '@/composables/useOnlineStatus'
 import db from '@/db/indexedDb'
 import { addToQueue } from '@/db/syncQueue.service'
 import http from '@/services/http'
+import { useMovementTypesStore } from '@/stores/movementTypes.store'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { usePlantsStore } from '@/stores/plants.store'
 import { defineStore } from 'pinia'
@@ -47,7 +48,6 @@ export const useMovementsStore = defineStore('movements', {
     },
 
     async createMovement(plantId, formData) {
-      const { isOnline } = useOnlineStatus()
       const plantsStore = usePlantsStore()
       const nurseryStore = useNurseryStore()
       this.movementsError = ''
@@ -70,7 +70,7 @@ export const useMovementsStore = defineStore('movements', {
           return { ok: true, data: created }
         }
 
-        const localMovement = await enqueueLocalMovement(this, ctx)
+        const localMovement = await enqueueLocalMovement(this, plantsStore, ctx)
         return { ok: true, data: localMovement }
       } catch (error) {
         this.movementsError = error?.response?.data?.error || 'Не удалось создать движение.'
@@ -86,13 +86,20 @@ export const useMovementsStore = defineStore('movements', {
       this.isLoading = true
 
       try {
-        await http.delete(`/nurseries/${nurseryStore.nurseryId}/plants/${plantId}/movements/${id}`)
-
-        if (this.movementsByPlant[plantId]) {
-          this.movementsByPlant[plantId] = this.movementsByPlant[plantId].filter((item) => item.id !== id)
+        if (isOnline.value) {
+          await http.delete(`/nurseries/${nurseryStore.nurseryId}/plants/${plantId}/movements/${id}`)
+          removeMovementLocally(this, plantId, id)
+          await db.movements.delete(id)
+          return { ok: true }
         }
 
+        // F17: офлайн-удаление — убираем локально и ставим delete_movement в очередь
+        // (syncManager обрабатывает этот тип; 404 при повторной доставке считается успехом).
+        // Если id ещё local_ (движение создано офлайн и не синкнуто), reconcileLocalId
+        // перепишет payload.id на серверный после доставки create_movement (F8).
+        removeMovementLocally(this, plantId, id)
         await db.movements.delete(id)
+        await addToQueue('delete_movement', { id, plantId, nurseryId: nurseryStore.nurseryId })
         return { ok: true }
       } catch (error) {
         this.movementsError = error?.response?.data?.error || 'Не удалось удалить движение.'
@@ -124,14 +131,18 @@ async function runOnlineCreateMovement(store, plantsStore, { plantId, nurseryId,
   return created
 }
 
-async function enqueueLocalMovement(store, { plantId, nurseryId, formData, clientRequestId }) {
+async function enqueueLocalMovement(store, plantsStore, { plantId, nurseryId, formData, clientRequestId }) {
   const localId = `local_${Date.now()}`
+  // sets_status тип движения задаёт на сервере; офлайн резолвим его из кэша типов, чтобы
+  // оптимистично отразить смену статуса растения в локальной карточке (F17).
+  const movementType = useMovementTypesStore().movementTypes.find((item) => item.id === formData.typeId)
   const localMovement = {
     id: localId,
     plant_id: plantId,
     type_id: formData.typeId,
     from_location_id: formData.fromLocationId ?? null,
     to_location_id: formData.toLocationId ?? null,
+    sets_status: movementType?.sets_status ?? null,
     quantity: formData.quantity ?? 1,
     notes: formData.notes,
     created_at: new Date().toISOString(),
@@ -144,6 +155,10 @@ async function enqueueLocalMovement(store, { plantId, nurseryId, formData, clien
 
   store.movementsByPlant[plantId].unshift(localMovement)
   await db.movements.put(localMovement)
+
+  // F17: как и в онлайне, применяем эффект движения к растению (статус/локация). Офлайн
+  // это делается локально (state + Dexie), см. applyMovementToPlant.
+  await applyMovementToPlant(plantsStore, plantId, localMovement)
 
   // nurseryId — фиксация питомника очереди (F7), localId — замена на серверный id (F8),
   // clientRequestId — идемпотентность повторной доставки (F2).
@@ -168,7 +183,34 @@ async function applyMovementToPlant(plantsStore, plantId, movement) {
     updates.locationId = movement.to_location_id
   }
 
-  if (Object.keys(updates).length > 0) {
+  if (Object.keys(updates).length === 0) {
+    return
+  }
+
+  if (isOnline.value) {
     await plantsStore.updatePlant(plantId, updates)
+    return
+  }
+
+  // Офлайн: HTTP-patch недоступен — отражаем статус/локацию в локальной карточке напрямую
+  // (state + Dexie). Серверная сторона применит эффект при доставке create_movement.
+  const localPatch = {}
+  if (updates.status) {
+    localPatch.status = updates.status
+  }
+  if (updates.locationId) {
+    localPatch.location_id = updates.locationId
+  }
+
+  const localPlant = plantsStore.plants.find((item) => item.id === plantId)
+  if (localPlant) {
+    Object.assign(localPlant, localPatch)
+  }
+  await db.plants.update(plantId, localPatch)
+}
+
+function removeMovementLocally(store, plantId, id) {
+  if (store.movementsByPlant[plantId]) {
+    store.movementsByPlant[plantId] = store.movementsByPlant[plantId].filter((item) => item.id !== id)
   }
 }

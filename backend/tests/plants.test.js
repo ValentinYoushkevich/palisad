@@ -135,6 +135,30 @@ describe('M9 — Реестр растений', () => {
     expect(new Set(rows.map((p) => p.qr_code)).size).toBe(5);
   });
 
+  // B28: numeric_code должны быть уникальны и в пределах партии (раньше близкие Date.now()
+  // давали коллизию → 409 на весь батч), и bulk обязан писать activity по каждому растению.
+  it('bulk-create: N уникальных numeric_code + activity на каждое (B28)', async () => {
+    const ctx = await createOwnerWithNursery();
+    const count = 25;
+    const res = await api()
+      .post(`${plantsBase(ctx)}/bulk`)
+      .set('Cookie', ctx.cookie)
+      .send({ count, template: { variety: 'BulkCodes' } });
+    expect(res.status).toBe(201);
+
+    const rows = await db('plants').where({ nursery_id: ctx.nurseryId, variety: 'BulkCodes' });
+    expect(rows).toHaveLength(count);
+    // все numeric_code уникальны в пределах партии
+    expect(new Set(rows.map((p) => p.numeric_code)).size).toBe(count);
+
+    // bulk пишет activity: по одному plant.created на каждое созданное растение
+    const ids = rows.map((p) => p.id);
+    const logs = await db('activity_logs')
+      .where({ nursery_id: ctx.nurseryId, event_type: 'plant.created' })
+      .whereIn('entity_id', ids);
+    expect(logs).toHaveLength(count);
+  });
+
   it('теги растений требуют feature_tags → 403', async () => {
     const ctx = await createOwnerWithNursery();
     const plant = (await createPlant(ctx)).body;

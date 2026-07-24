@@ -6,5 +6,12 @@ export const COOKIE_OPTIONS = {
   sameSite: 'strict',
 };
 
+// B30: refresh-cookie нужен только эндпоинтам /api/auth (login/refresh/logout), а не на
+// каждом запросе. Ограничиваем path — cookie перестаёт слаться на весь /api.
+export const REFRESH_COOKIE_OPTIONS = {
+  ...COOKIE_OPTIONS,
+  path: '/api/auth',
+};
+
 export const ACCESS_TTL_MS = 15 * 60 * 1000;
 export const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;

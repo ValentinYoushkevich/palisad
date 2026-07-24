@@ -7,6 +7,7 @@ import {
   COOKIE_ACCESS,
   COOKIE_OPTIONS,
   COOKIE_REFRESH,
+  REFRESH_COOKIE_OPTIONS,
   REFRESH_TTL_MS,
 } from '@/constants/auth.constants.js';
 import { ROLES } from '@/constants/roles.constants.js';
@@ -79,7 +80,8 @@ export async function login(email, password, res) {
 
 export function logout(res) {
   res.clearCookie(COOKIE_ACCESS, COOKIE_OPTIONS);
-  res.clearCookie(COOKIE_REFRESH, COOKIE_OPTIONS);
+  // B30: чистим refresh тем же path, которым он выставлен, иначе браузер его не удалит.
+  res.clearCookie(COOKIE_REFRESH, REFRESH_COOKIE_OPTIONS);
 }
 
 export async function refresh(req, res) {
@@ -269,7 +271,7 @@ function setTokenCookies(res, accessToken, refreshToken) {
     maxAge: ACCESS_TTL_MS,
   });
   res.cookie(COOKIE_REFRESH, refreshToken, {
-    ...COOKIE_OPTIONS,
+    ...REFRESH_COOKIE_OPTIONS,
     maxAge: REFRESH_TTL_MS,
   });
 }

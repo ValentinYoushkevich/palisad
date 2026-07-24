@@ -42,7 +42,13 @@ db.open().catch((error) => {
 
 app.mount('#app')
 
-http.get('/health').catch(() => {})
+// Прогрев соединения/сессии. Ошибку не проглатываем молча — как минимум логируем в dev,
+// чтобы недоступность бэкенда на старте была видна при отладке (F25).
+http.get('/health').catch((error) => {
+  if (import.meta.env.DEV) {
+    console.warn('Health check failed', error)
+  }
+})
 registerServiceWorker({
   enableInDev: SW_ENABLE_IN_DEV,
   debug: SW_DEBUG

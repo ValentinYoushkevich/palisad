@@ -220,6 +220,7 @@ export const useNurseryStore = defineStore('nursery', {
       this.nurseries = []
       this.subscription = null
       this.plans = []
+      this.nurseryError = ''
       this.isLoading = false
       this.isInitialized = false
       clearCachedNurseryContext()

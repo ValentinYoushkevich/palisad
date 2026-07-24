@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import argon2 from 'argon2';
 
 import db from '@/config/knex.js';
@@ -41,7 +43,10 @@ export async function createNursery(accountId, data) {
     throw new AppError('Аккаунт не найден', 404);
   }
 
-  const passwordHash = await argon2.hash(Math.random().toString(36));
+  // B27: owner-заглушка получает временный пароль-плейсхолдер, но даже он должен быть
+  // криптостойким — Math.random() для секретов не годится (предсказуем). 32 байта из
+  // CSPRNG → argon2-хэш, как и раньше.
+  const passwordHash = await argon2.hash(randomBytes(32).toString('hex'));
 
   // Лимит проверяется под advisory-lock'ом внутри той же транзакции, что и вставка —
   // иначе параллельные createNursery пробивают nursery_limit (B10). Питомник и его

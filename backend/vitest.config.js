@@ -26,12 +26,11 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.js'],
-      // Инфраструктура/данные и cron-обёртка вне интеграционного покрытия.
+      // Инфраструктура/данные вне интеграционного покрытия. Cron-обёртки
+      // (cleanupCron/subscriptionCron) покрыты в tests/cronJobs.test.js — не исключаем.
       exclude: [
         'src/config/**',
         'src/constants/**',
-        'src/utils/cleanupCron.js',
-        'src/utils/subscriptionCron.js',
       ],
       reporter: ['text-summary', 'text'],
       // Строки/функции/стейтменты держим выше 90%. Ветки — 80% (остаток приходится

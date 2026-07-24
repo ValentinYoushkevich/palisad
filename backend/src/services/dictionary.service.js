@@ -1,4 +1,3 @@
-import { STRUCTURE_ROLES } from '@/constants/roles.constants.js';
 import * as containerTypeRepo from '@/repositories/containerType.repository.js';
 import * as movementTypeRepo from '@/repositories/movementType.repository.js';
 import * as nurserySpeciesRepo from '@/repositories/nurserySpecies.repository.js';
@@ -239,18 +238,17 @@ export async function deleteContainerType(nurseryId, id) {
     throw new AppError('Системный тип контейнера нельзя удалять', 403);
   }
 
+  // B23: теперь countUsedByPlants реально определяет ветку (раньше обе ветки были
+  // идентичны — мягкое удаление независимо от использования). Контейнер, привязанный к
+  // растениям, физически удалять нельзя (у растений повисла бы ссылка на неактивный тип) —
+  // деактивируем (контракт приёмки M8#6). Неиспользуемый удаляем физически.
   const used = await containerTypeRepo.countUsedByPlants(id);
   if (used > 0) {
     return containerTypeRepo.updateById(id, { is_active: false });
   }
 
-  return containerTypeRepo.updateById(id, { is_active: false });
-}
-
-export function ensureStructureRole(userRole) {
-  if (!STRUCTURE_ROLES.includes(userRole)) {
-    throw new AppError('Недостаточно прав', 403);
-  }
+  await containerTypeRepo.deleteById(id);
+  return { id, deleted: true };
 }
 
 async function resolveCatalogSpecies(scientificName) {

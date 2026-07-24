@@ -25,13 +25,13 @@
     </div>
 
     <DataTable
-      :value="plantsStore.filtered"
+      :value="tableRows"
       :loading="plantsStore.isLoading"
       lazy
       paginator
       :rows="plantsStore.pagination.perPage"
       :rowsPerPageOptions="[20, 50, 100]"
-      :totalRecords="plantsStore.pagination.total"
+      :totalRecords="tableTotal"
       paginatorTemplate="RowsPerPageDropdown FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink"
       stripedRows
       @page="onPage"
@@ -126,6 +126,16 @@ const { isOnline } = useOnlineStatus()
 const createVisible = ref(false)
 const bulkVisible = ref(false)
 const showCreateActions = computed(() => (authStore.isOwner || authStore.isAgronomist) && isOnline.value)
+
+// F24: DataTable в режиме lazy сам не пагинирует/не фильтрует. Онлайн сервер уже вернул
+// отфильтрованную страницу (fetchPlants получает activeFilters) — подаём её как есть, иначе
+// клиентский getter `filtered` повторно резал бы страницу и totalRecords расходился бы с
+// числом видимых строк. Офлайн данные грузятся из Dexie целиком, поэтому клиентская
+// фильтрация там легитимна, а totalRecords берём из числа локальных совпадений.
+const tableRows = computed(() => (isOnline.value ? plantsStore.plants : plantsStore.filtered))
+const tableTotal = computed(() => (
+  isOnline.value ? plantsStore.pagination.total : plantsStore.filtered.length
+))
 
 onMounted(async () => {
   await Promise.all([

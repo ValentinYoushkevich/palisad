@@ -18,6 +18,12 @@ const KNOWN_CACHES = new Set([APP_SHELL_CACHE, ASSET_CACHE, API_CACHE])
 
 const APP_SHELL_URLS = ['/', '/index.html']
 
+// F15: без ограничения роста хэшированные бандлы прошлых деплоев копятся в статик-кэше
+// бессрочно (VERSION между деплоями не меняется, имена контентно-хэшированы → новые ключи).
+// Ограничиваем число записей и обрезаем самые старые (keys() отдаёт в порядке добавления;
+// свежие ассеты текущего билда попадают в конец, старые вытесняются первыми).
+const MAX_ASSET_ENTRIES = 100
+
 self.addEventListener('install', (event) => {
   event.waitUntil(precacheAppShell())
 })
@@ -37,7 +43,24 @@ async function cleanupOldCaches() {
   await Promise.all(
     keys.filter((key) => !KNOWN_CACHES.has(key)).map((key) => caches.delete(key))
   )
+  // Подстраховка: если статик-кэш успел разрастись в прошлой версии SW — обрезаем на активации.
+  await trimCache(ASSET_CACHE, MAX_ASSET_ENTRIES)
   await self.clients.claim()
+}
+
+// Обрезает кэш до maxEntries, удаляя самые старые записи (по порядку добавления).
+async function trimCache(cacheName, maxEntries) {
+  const cache = await caches.open(cacheName)
+  const keys = await cache.keys()
+  const excess = keys.length - maxEntries
+
+  if (excess <= 0) {
+    return
+  }
+
+  for (let i = 0; i < excess; i++) {
+    await cache.delete(keys[i])
+  }
 }
 
 self.addEventListener('fetch', (event) => {
@@ -90,7 +113,9 @@ async function cacheFirst(request, cacheName) {
   const response = await fetch(request)
   if (response.ok) {
     const cache = await caches.open(cacheName)
-    cache.put(request, response.clone())
+    await cache.put(request, response.clone())
+    // F15: держим статик-кэш в пределах лимита после каждого нового ассета.
+    await trimCache(cacheName, MAX_ASSET_ENTRIES)
   }
   return response
 }

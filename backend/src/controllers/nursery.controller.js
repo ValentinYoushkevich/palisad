@@ -1,5 +1,7 @@
+import { STRUCTURE_ROLES } from '@/constants/roles.constants.js';
 import * as authService from '@/services/auth.service.js';
 import * as nurseryService from '@/services/nursery.service.js';
+import { AppError } from '@/utils/AppError.js';
 
 export async function listNurseries(req, res, next) {
   try {
@@ -39,6 +41,12 @@ export async function createNursery(req, res, next) {
 
 export async function updateMyNursery(req, res, next) {
   try {
+    // B22: если активный питомник есть — переименовать может только структурная роль
+    // (owner/agronomist), не observer/worker. Без активного питомника роль не проверяем —
+    // сервис отдаст 404 (нечего обновлять), а не вводящий в заблуждение 403.
+    if (req.user.nurseryId && !STRUCTURE_ROLES.includes(req.user.role)) {
+      throw new AppError('Недостаточно прав', 403);
+    }
     const nursery = await nurseryService.updateNursery(
       req.user.accountId,
       req.user.nurseryId,

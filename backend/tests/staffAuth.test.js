@@ -112,7 +112,7 @@ describe('B11 — staff-логин и RBAC', () => {
     expect(res.status).toBe(400);
   });
 
-  it('смена пароля деактивированным сотрудником → 404', async () => {
+  it('смена пароля деактивированным сотрудником → 401', async () => {
     await setFreePlan({ user_limit: 10 });
     const ctx = await createOwnerWithNursery();
     const staff = await createStaffLogin(ctx, 'agronomist');
@@ -126,7 +126,9 @@ describe('B11 — staff-логин и RBAC', () => {
       .post('/api/auth/change-password')
       .set('Cookie', login.cookie)
       .send({ currentPassword: staff.password, newPassword: NEW_PASSWORD });
-    expect(res.status).toBe(404);
+    // B31: деактивированный сотрудник отклоняется уже на requireAuth (401), не доходя до
+    // логики смены пароля (раньше та отдавала 404 по «активный сотрудник не найден»).
+    expect(res.status).toBe(401);
   });
 
   it('ролевой гейт: observer на запись → 403, agronomist → 201 (реальные логины)', async () => {

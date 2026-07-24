@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   api,
   createOwnerWithNursery,
+  createStaff,
   db,
   loginCookie,
   register,
@@ -19,6 +20,31 @@ describe('M3 — Питомник', () => {
     const { cookie } = await loginCookie(email, STRONG_PASSWORD);
     const res = await api().get('/api/nurseries/my').set('Cookie', cookie);
     expect(res.status).toBe(404);
+  });
+
+  // B22: PATCH питомника закрыт для не-структурных ролей (раньше без requireRole).
+  it('observer не может переименовать питомник → 403, owner может', async () => {
+    await setFreePlan({ user_limit: 50 });
+    const ctx = await createOwnerWithNursery();
+    const { cookie } = await createStaff(ctx, 'observer');
+    const denied = await api()
+      .patch(`/api/nurseries/${ctx.nurseryId}`)
+      .set('Cookie', cookie)
+      .send({ name: 'Hacked Name' });
+    expect(denied.status).toBe(403);
+
+    // и через /my — гейт роли в контроллере updateMyNursery
+    const deniedMy = await api()
+      .patch('/api/nurseries/my')
+      .set('Cookie', cookie)
+      .send({ name: 'Hacked My' });
+    expect(deniedMy.status).toBe(403);
+
+    const ok = await api()
+      .patch(`/api/nurseries/${ctx.nurseryId}`)
+      .set('Cookie', ctx.cookie)
+      .send({ name: 'Legit Rename' });
+    expect(ok.status).toBe(200);
   });
 
   it('создание питомника создаёт owner-пользователя (201)', async () => {

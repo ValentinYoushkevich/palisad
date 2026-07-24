@@ -21,6 +21,16 @@ export default function errorHandler(err, req, res, _next) {
 }
 
 function mapDbError(err) {
+  // B26: невалидный текст идентификатора (кривой UUID/число в :id-параметрах) даёт
+  // Postgres 22P02 — это ошибка ввода клиента, отвечаем 400, а не 500.
+  if (err?.code === '22P02') {
+    return {
+      status: 400,
+      errorCode: 'invalid_input',
+      message: 'Некорректный формат идентификатора.',
+    };
+  }
+
   if (err?.code !== '23505') {
     return null;
   }

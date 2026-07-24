@@ -5,10 +5,8 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 
-import * as subscriptionController from '@/controllers/subscription.controller.js';
 import errorHandler from '@/middlewares/errorHandler.js';
 import { generalLimiter } from '@/middlewares/rateLimit.js';
-import { requireAuth } from '@/middlewares/requireAuth.js';
 import activityLogRouter from '@/routes/activityLog.router.js';
 import authRouter from '@/routes/auth.router.js';
 import dictionaryRouter from '@/routes/dictionary.router.js';
@@ -19,6 +17,7 @@ import movementRouter from '@/routes/movement.router.js';
 import notificationRouter from '@/routes/notification.router.js';
 import nurseryRouter from '@/routes/nursery.router.js';
 import operationRouter from '@/routes/operation.router.js';
+import plansRouter from '@/routes/plans.router.js';
 import plantRouter from '@/routes/plant.router.js';
 import staffRouter from '@/routes/staff.router.js';
 import subscriptionRouter from '@/routes/subscription.router.js';
@@ -54,7 +53,8 @@ app.use('/api/nurseries/:nurseryId/activity', activityLogRouter);
 app.use('/api/nurseries/:nurseryId/notifications', notificationRouter);
 app.use('/api/nurseries/:nurseryId', dictionaryRouter);
 app.use('/api/subscriptions', subscriptionRouter);
-app.get('/api/plans', requireAuth, subscriptionController.getPlans);
+// B33: алиас GET /api/plans вынесен из app.js в собственный роутер (был инлайн мимо роутеров).
+app.use('/api/plans', plansRouter);
 
 app.use(errorHandler);
 

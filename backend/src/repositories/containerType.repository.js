@@ -40,3 +40,7 @@ export function countUsedByPlants(id) {
     .count('id as count')
     .then((rows) => Number(rows[0].count));
 }
+
+export function deleteById(id) {
+  return db('container_types').where({ id }).del();
+}

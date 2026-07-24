@@ -23,6 +23,8 @@
         </button>
       </header>
 
+      <p v-if="store.error" class="bell__error" role="alert">{{ store.error }}</p>
+
       <ul v-if="store.items.length > 0" class="bell__list">
         <li v-for="item in store.items" :key="item.id">
           <button
@@ -257,5 +259,14 @@ onBeforeUnmount(() => {
   text-align: center;
   color: #6b7280;
   font-size: 14px;
+}
+
+.bell__error {
+  margin: 0;
+  padding: 10px 14px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border-bottom: 1px solid #fee2e2;
+  font-size: 13px;
 }
 </style>

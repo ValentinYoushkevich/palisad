@@ -7,7 +7,8 @@ vi.mock('@/services/http', () => ({
 // Управляем онлайн/офлайн через hoisted-состояние (безопасно для фабрики vi.mock).
 const onlineState = vi.hoisted(() => ({ online: true }))
 vi.mock('@/composables/useOnlineStatus', () => ({
-  useOnlineStatus: () => ({ isOnline: { value: onlineState.online } })
+  useOnlineStatus: () => ({ isOnline: { value: onlineState.online } }),
+  isOnline: { get value() { return onlineState.online } }
 }))
 
 // Даунскейл мокаем — canvas в jsdom не рисует; возвращаем предсказуемый webp-Blob.

@@ -15,6 +15,16 @@
 --     movements.client_request_id + частичные UNIQUE-индексы           [миграция 20260724130000]
 --   - фото операций как байты: photos.image (bytea), photos.mime_type, photos.size;
 --     photos.url → nullable (старый путь по URL выведен из использования) [миграция 20260724160000]
+--   - чистка индексов (D9/D10): сняты избыточные (idx_plants_nursery/_qr/_numeric_code,
+--     idx_plant_tags_plant, idx_species_catalog_usage_key, idx_*_nursery по справочникам,
+--     idx_users_role), добавлены индексы под FK (operations.user_id, movements.*,
+--     plant_stage_history.*, accounts.last_active_nursery_id, subscriptions.plan_id) [миграция 20260724180000]
+--   - ограничения справочников/подписок (D11/D12/D13): partial-unique tags(nursery_id,name)
+--     WHERE is_active, users(nursery_id,email) WHERE email IS NOT NULL,
+--     subscriptions(account_id) WHERE status='active'; CHECK на stage_labor_norms
+--     (norm_minutes>0, operation_type ∈ канон)                          [миграция 20260724181000]
+--   - принадлежность питомника аккаунту (D15): составной FK
+--     accounts(id, last_active_nursery_id) → nurseries(account_id, id) + UNIQUE(account_id, id) [миграция 20260724182000]
 -- Изменения v0.8:
 --   - виды: глобальный species_catalog + привязка nursery_species (вместо per-nursery species)
 --   - plants.nursery_species_id → FK на nursery_species (вместо plants.species_id → species)
@@ -79,14 +89,22 @@ CREATE TABLE nurseries (
   name        TEXT        NOT NULL,
   address     TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- v2 (D15, миграция 20260724182000): цель составного FK
+  -- accounts(id, last_active_nursery_id) → nurseries(account_id, id).
+  UNIQUE (account_id, id)
 );
 
 -- v2: FK accounts.last_active_nursery_id → nurseries. Вынесен в ALTER, т.к. accounts
 -- создаётся раньше nurseries (миграция 20260614120000).
+-- D15 (миграция 20260724182000): одностолбцовый FK заменён на СОСТАВНОЙ
+-- accounts(id, last_active_nursery_id) → nurseries(account_id, id) — питомник обязан
+-- принадлежать этому аккаунту. MATCH SIMPLE: при last_active_nursery_id IS NULL FK не
+-- проверяется. ON DELETE SET NULL только по ссылочному столбцу (синтаксис PG15+).
 ALTER TABLE accounts
-  ADD CONSTRAINT accounts_last_active_nursery_id_foreign
-  FOREIGN KEY (last_active_nursery_id) REFERENCES nurseries(id) ON DELETE SET NULL;
+  ADD CONSTRAINT accounts_last_active_nursery_fk
+  FOREIGN KEY (id, last_active_nursery_id)
+  REFERENCES nurseries (account_id, id) ON DELETE SET NULL (last_active_nursery_id);
 
 -- Роли:
 --   owner      — полный доступ, управляет подпиской и сотрудниками
@@ -345,8 +363,14 @@ CREATE TABLE stage_labor_norms (
   id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   nursery_id     UUID        NOT NULL REFERENCES nurseries(id) ON DELETE CASCADE,
   stage_id       UUID        NOT NULL REFERENCES production_stages(id) ON DELETE CASCADE,
-  operation_type TEXT        NOT NULL,
-  norm_minutes   INTEGER     NOT NULL,
+  operation_type TEXT        NOT NULL  -- v2 (D13, миграция 20260724181000)
+                             CONSTRAINT chk_stage_labor_norms_operation_type
+                             CHECK (operation_type IN ('grafting', 'pruning', 'treatment',
+                                                       'transplant', 'change_stage',
+                                                       'inspection', 'other')),
+  norm_minutes   INTEGER     NOT NULL  -- v2 (D13, миграция 20260724181000)
+                             CONSTRAINT chk_stage_labor_norms_minutes
+                             CHECK (norm_minutes > 0),
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (nursery_id, stage_id, operation_type)
@@ -456,27 +480,28 @@ CREATE TABLE notifications (
 -- Индексы
 -- ------------------------------------------------------------
 
-CREATE INDEX idx_plants_nursery        ON plants(nursery_id);
+-- D9 (миграция 20260724180000): сняты как избыточные idx_plants_nursery (перекрыт
+-- idx_plants_active + idx_plants_nursery_created; все запросы фильтруют deleted_at IS NULL),
+-- idx_plants_qr / idx_plants_numeric_code (после D8 код ищется nursery-scoped через
+-- uq_plants_nursery_*).
 CREATE INDEX idx_plants_status         ON plants(status)          WHERE deleted_at IS NULL;
-CREATE INDEX idx_plants_qr             ON plants(qr_code);
-CREATE INDEX idx_plants_numeric_code   ON plants(numeric_code);
 CREATE INDEX idx_plants_active         ON plants(nursery_id)      WHERE deleted_at IS NULL;
 CREATE INDEX idx_plants_nursery_species ON plants(nursery_species_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_plants_container      ON plants(container_id)    WHERE deleted_at IS NULL;
 
-CREATE INDEX idx_species_catalog_usage_key ON species_catalog(gbif_usage_key);
+-- D9: idx_species_catalog_usage_key снят (дублирует UNIQUE(gbif_usage_key)).
 CREATE INDEX idx_species_catalog_scientific_name ON species_catalog(lower(scientific_name));
-CREATE INDEX idx_nursery_species_nursery ON nursery_species(nursery_id);
+-- D9: idx_nursery_species_nursery снят (префикс покрыт UNIQUE(nursery_id, species_catalog_id)).
 CREATE INDEX idx_nursery_species_catalog ON nursery_species(species_catalog_id);
 
-CREATE INDEX idx_container_types_nursery ON container_types(nursery_id);
+-- D9: idx_container_types_nursery снят (префикс покрыт UNIQUE(nursery_id, code)).
 
 CREATE INDEX idx_operations_plant      ON operations(plant_id)    WHERE deleted_at IS NULL;
 
 CREATE INDEX idx_movements_plant       ON movements(plant_id);
 CREATE INDEX idx_movements_type        ON movements(type_id);
 
-CREATE INDEX idx_movement_types_nursery ON movement_types(nursery_id);
+-- D9: idx_movement_types_nursery снят (префикс покрыт UNIQUE(nursery_id, slug)).
 
 CREATE INDEX idx_locations_nursery     ON locations(nursery_id);
 CREATE INDEX idx_locations_parent      ON locations(parent_id);
@@ -485,11 +510,11 @@ CREATE INDEX idx_subscriptions_acct    ON subscriptions(account_id);
 CREATE INDEX idx_subscriptions_active  ON subscriptions(account_id, status)
                                         WHERE status IN ('trial', 'active');
 
-CREATE INDEX idx_plant_tags_plant      ON plant_tags(plant_id);
+-- D9: idx_plant_tags_plant снят (дублирует префикс PK plant_tags(plant_id, tag_id)).
 CREATE INDEX idx_plant_tags_tag        ON plant_tags(tag_id);
 
 CREATE INDEX idx_users_nursery         ON users(nursery_id);
-CREATE INDEX idx_users_role            ON users(role);
+-- D9: idx_users_role снят (низкая кардинальность, запросов по role нет).
 CREATE INDEX idx_users_active          ON users(nursery_id)       WHERE is_active = true;
 
 CREATE INDEX idx_activity_nursery      ON activity_logs(nursery_id);
@@ -499,10 +524,20 @@ CREATE INDEX idx_activity_created_at   ON activity_logs(created_at);
 CREATE INDEX idx_activity_entity       ON activity_logs(entity_type, entity_id);
 
 -- v2: производственные стадии (миграция 20260614140000)
-CREATE INDEX idx_production_stages_nursery ON production_stages(nursery_id);
+-- D9: idx_production_stages_nursery снят (префикс покрыт UNIQUE(nursery_id, slug)).
 CREATE INDEX idx_plants_stage             ON plants(stage_id)         WHERE deleted_at IS NULL;
 CREATE INDEX idx_plant_stage_history_plant ON plant_stage_history(plant_id);
-CREATE INDEX idx_stage_labor_norms_nursery ON stage_labor_norms(nursery_id);
+-- D9: idx_stage_labor_norms_nursery снят (префикс покрыт UNIQUE(nursery_id, stage_id, operation_type)).
+
+-- v2: индексы под FK-столбцы (D10, миграция 20260724180000)
+CREATE INDEX idx_operations_user          ON operations(user_id);
+CREATE INDEX idx_movements_user           ON movements(user_id);
+CREATE INDEX idx_movements_from_location  ON movements(from_location_id);
+CREATE INDEX idx_movements_to_location    ON movements(to_location_id);
+CREATE INDEX idx_plant_stage_history_stage      ON plant_stage_history(stage_id);
+CREATE INDEX idx_plant_stage_history_changed_by ON plant_stage_history(changed_by);
+CREATE INDEX idx_accounts_last_active_nursery   ON accounts(last_active_nursery_id);
+CREATE INDEX idx_subscriptions_plan       ON subscriptions(plan_id);
 
 -- v2: in-app уведомления (миграция 20260614130000)
 CREATE INDEX idx_notifications_user       ON notifications(nursery_id, user_id);
@@ -528,6 +563,16 @@ CREATE UNIQUE INDEX uq_plants_nursery_numeric_code ON plants(nursery_id, numeric
 CREATE UNIQUE INDEX uq_production_stages_system_slug ON production_stages(slug) WHERE nursery_id IS NULL;
 CREATE UNIQUE INDEX uq_movement_types_system_slug    ON movement_types(slug)    WHERE nursery_id IS NULL;
 CREATE UNIQUE INDEX uq_container_types_system_code    ON container_types(code)   WHERE nursery_id IS NULL;
+
+-- v2: недостающая уникальность в пределах питомника (D11, миграция 20260724181000)
+-- tags — partial по активным (soft-delete через is_active); users — по строкам с непустым
+-- email (email nullable, но идентификатор входа не должен дублироваться в питомнике).
+CREATE UNIQUE INDEX uq_tags_nursery_name   ON tags(nursery_id, name)   WHERE is_active = true;
+CREATE UNIQUE INDEX uq_users_nursery_email ON users(nursery_id, email) WHERE email IS NOT NULL;
+
+-- v2: одна активная подписка на аккаунт (D12, миграция 20260724181000)
+-- (idx_subscriptions_active выше не UNIQUE и покрывает trial+active — оставлен под выборки)
+CREATE UNIQUE INDEX uq_subscriptions_active_account ON subscriptions(account_id) WHERE status = 'active';
 
 -- ------------------------------------------------------------
 -- Seed: системные типы движений

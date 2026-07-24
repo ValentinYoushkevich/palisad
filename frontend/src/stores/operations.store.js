@@ -1,4 +1,4 @@
-import { useOnlineStatus } from '@/composables/useOnlineStatus'
+import { isOnline } from '@/composables/useOnlineStatus'
 import db from '@/db/indexedDb'
 import { savePhoto } from '@/db/pendingPhotos.service'
 import { addToQueue } from '@/db/syncQueue.service'
@@ -49,7 +49,6 @@ export const useOperationsStore = defineStore('operations', {
     },
 
     async createOperation(plantId, formData) {
-      const { isOnline } = useOnlineStatus()
       const plantsStore = usePlantsStore()
       const nurseryStore = useNurseryStore()
       this.operationsError = ''
@@ -85,7 +84,6 @@ export const useOperationsStore = defineStore('operations', {
     },
 
     async updateOperation(id, plantId, formData) {
-      const { isOnline } = useOnlineStatus()
       this.operationsError = ''
       this.isLoading = true
 
@@ -118,7 +116,6 @@ export const useOperationsStore = defineStore('operations', {
     },
 
     async softDelete(id, plantId) {
-      const { isOnline } = useOnlineStatus()
       this.operationsError = ''
       this.isLoading = true
 
@@ -145,7 +142,6 @@ export const useOperationsStore = defineStore('operations', {
     },
 
     async attachPhoto(operationId, plantId, file) {
-      const { isOnline } = useOnlineStatus()
       const nurseryStore = useNurseryStore()
       this.operationsError = ''
 
@@ -225,11 +221,14 @@ async function runOnlineCreateOperation(store, plantsStore, { plantId, nurseryId
 
 async function enqueueLocalOperation(store, plantsStore, { plantId, nurseryId, formData, clientRequestId }) {
   const localId = `local_${Date.now()}`
+  // F17: раньше локальная операция сохраняла только type/notes — остальные поля формы
+  // (newStageId, newContainerId, дата, количество и т.п.) терялись до синка, из-за чего
+  // офлайн-карточка операции была неполной. Сохраняем все поля formData, переопределяя
+  // только структурные (id/plant_id/created_at/_pending).
   const localOperation = {
+    ...formData,
     id: localId,
     plant_id: plantId,
-    type: formData.type,
-    notes: formData.notes,
     created_at: new Date().toISOString(),
     _pending: true
   }

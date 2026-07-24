@@ -42,21 +42,6 @@ async function logoutAndRedirect() {
   globalThis.location.assign('/login')
 }
 
-http.interceptors.request.use((config) => {
-  const authStore = useAuthStore()
-  const requestConfig = { ...config }
-
-  if (!requestConfig.headers) {
-    requestConfig.headers = {}
-  }
-
-  if (authStore.accessToken) {
-    requestConfig.headers.Authorization = `Bearer ${authStore.accessToken}`
-  }
-
-  return requestConfig
-})
-
 http.interceptors.response.use(
   (response) => response,
   async (error) => {

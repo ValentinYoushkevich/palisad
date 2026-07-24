@@ -87,16 +87,6 @@ const commonNavItems = computed(() => {
       visible: authStore.isAuthenticated
     },
     {
-      to: '/locations',
-      label: 'Локации',
-      visible: false
-    },
-    {
-      to: '/catalog',
-      label: 'Справочники',
-      visible: false
-    },
-    {
       to: '/scanner',
       label: 'Сканер',
       visible: authStore.canWrite && isMobileClient.value

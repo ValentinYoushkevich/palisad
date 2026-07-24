@@ -130,11 +130,10 @@ describe('auth.store', () => {
       }
 
       const store = useAuthStore()
-      store.setTokens('access', 'refresh')
+      store.setUser({ id: 'u1', role: 'owner' })
 
       await store.clearSession()
 
-      expect(store.accessToken).toBe('')
       expect(store.user).toBeNull()
       expect(await db.plants.count()).toBe(0)
       expect(await db.species.count()).toBe(0)

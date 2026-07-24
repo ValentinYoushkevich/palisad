@@ -96,8 +96,16 @@ export async function createPlant(nurseryId, accountId, data, userId) {
 export async function bulkCreate(nurseryId, accountId, template, count) {
   await resolveReferences(nurseryId, template);
 
+  // B28: коды должны быть уникальны не только против БД, но и в пределах самой партии.
+  // Раньше generateUniqueNumericCode проверял лишь БД, а внутри батча ничего вставлено
+  // ещё не было — близкие Date.now() давали одинаковый numeric_code, и весь батч падал
+  // на per-nursery unique-constraint (409 на всё bulk-создание). reservedCodes держит
+  // уже выданные в этом вызове коды.
+  const reservedCodes = new Set();
   const records = [];
   for (let i = 0; i < count; i += 1) {
+    const numericCode = await generateUniqueNumericCode(nurseryId, reservedCodes);
+    reservedCodes.add(numericCode);
     records.push({
       nursery_id: nurseryId,
       nursery_species_id: template.speciesId ?? null,
@@ -109,18 +117,35 @@ export async function bulkCreate(nurseryId, accountId, template, count) {
       source: template.source ?? null,
       notes: template.notes ?? null,
       qr_code: generateQrCode(),
-      numeric_code: await generateUniqueNumericCode(nurseryId),
+      numeric_code: numericCode,
     });
   }
 
   // Как и в createPlant: лимит под advisory-lock'ом в транзакции, чтобы конкурентные
   // bulk-вставки суммарно не пробили plant_limit (B10).
-  return db.transaction(async (trx) => {
+  const plants = await db.transaction(async (trx) => {
     await lockAccount(trx, accountId);
     const current = await plantRepo.countByNursery(nurseryId, trx);
     await checkLimit(accountId, 'plant_limit', current + count - 1, trx);
     return plantRepo.bulkCreate(records, trx);
   });
+
+  // B28: bulk раньше вообще не писал activity. Логируем создание каждого растения по
+  // образцу одиночного createPlant. logActivity — best-effort (свои ошибки глотает),
+  // поэтому цикл не может уронить уже успешный ответ. userId здесь не пробрасывается
+  // (контроллер bulkCreate его не передаёт, а 5-й параметр упирается в max-params) —
+  // атрибуция появится, когда bulk-путь начнёт передавать userId; см. отчёт.
+  for (const plant of plants) {
+    await logActivity({
+      nurseryId,
+      eventType: EVENT_TYPES.PLANT_CREATED,
+      entityType: ENTITY_TYPES.PLANT,
+      entityId: plant.id,
+      details: { qr_code: plant.qr_code },
+    });
+  }
+
+  return plants;
 }
 
 // Соответствие полей запроса колонкам. PATCH должен менять только переданные поля,
@@ -262,9 +287,14 @@ async function resolveReferences(nurseryId, data) {
 
 // Проверка коллизии — в пределах питомника: коды уникальны per-nursery (D8), поэтому
 // пространство генерации сузилось до одного питомника и коллизии практически исчезли.
-async function generateUniqueNumericCode(nurseryId) {
+// reserved — коды, уже выданные в текущем bulk-вызове, но ещё не вставленные в БД:
+// без этой проверки батч мог сгенерировать один и тот же код дважды (B28).
+async function generateUniqueNumericCode(nurseryId, reserved = null) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const code = String(Date.now() + Math.floor(Math.random() * 10000)).slice(-8);
+    if (reserved?.has(code)) {
+      continue;
+    }
     const existing = await plantRepo.findByNumericCode(nurseryId, code);
     if (!existing) {
       return code;

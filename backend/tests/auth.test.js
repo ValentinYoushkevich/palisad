@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { api, db, register, STRONG_PASSWORD, toCookieHeader, uniqueEmail } from './helpers.js';
+import {
+  api,
+  createOwnerWithNursery,
+  createStaff,
+  db,
+  register,
+  setFreePlan,
+  STRONG_PASSWORD,
+  toCookieHeader,
+  uniqueEmail,
+} from './helpers.js';
 
 function cookieValue(setCookie, name) {
   const arr = setCookie ?? [];
@@ -124,5 +134,44 @@ describe('M2 — Аутентификация', () => {
     const setCookie = res.headers['set-cookie'] ?? [];
     expect(cookieValue(setCookie, 'access_token')).toBeNull();
     expect(cookieValue(setCookie, 'refresh_token')).toBeNull();
+  });
+});
+
+describe('M2 — доп. проверки B30/B31/T14', () => {
+  it('T14: тело логина не содержит password_hash', async () => {
+    const email = uniqueEmail('nohash');
+    await register(email, STRONG_PASSWORD, 'NoHash');
+    const res = await api().post('/api/auth/login').send({ email, password: STRONG_PASSWORD });
+    expect(res.status).toBe(200);
+    const body = JSON.stringify(res.body);
+    expect(body).not.toContain('password_hash');
+    expect(body).not.toContain('$argon2');
+  });
+
+  it('T14: битый access-токен → 401', async () => {
+    const res = await api().get('/api/nurseries').set('Cookie', 'access_token=not-a-jwt');
+    expect(res.status).toBe(401);
+  });
+
+  it('B30: refresh-cookie ограничен path=/api/auth, access — нет', async () => {
+    const email = uniqueEmail('cookiepath');
+    await register(email, STRONG_PASSWORD, 'Path User');
+    const res = await api().post('/api/auth/login').send({ email, password: STRONG_PASSWORD });
+    const setCookie = res.headers['set-cookie'] ?? [];
+    const refresh = setCookie.find((c) => c.startsWith('refresh_token='));
+    const access = setCookie.find((c) => c.startsWith('access_token='));
+    expect(refresh).toMatch(/Path=\/api\/auth/i);
+    expect(access).not.toMatch(/Path=\/api\/auth/i);
+  });
+
+  it('B31: токен деактивированного сотрудника → 401', async () => {
+    await setFreePlan({ user_limit: 50 });
+    const ctx = await createOwnerWithNursery();
+    const { user, cookie } = await createStaff(ctx, 'worker');
+    const base = `/api/nurseries/${ctx.nurseryId}/plants`;
+    expect((await api().get(base).set('Cookie', cookie)).status).toBe(200);
+
+    await db('users').where({ id: user.id }).update({ is_active: false });
+    expect((await api().get(base).set('Cookie', cookie)).status).toBe(401);
   });
 });

@@ -20,12 +20,30 @@ function planRow(overrides = {}) {
 }
 
 describe('M6 — Подписки', () => {
-  it('текущая подписка с деталями плана', async () => {
+  // B25: раньше select('subscriptions.*','plans.*') затирал одноимённые колонки, и ответ
+  // отдавал id ПЛАНА вместо id подписки. Проверяем, что наружу идут реальные поля
+  // подписки, а лимиты/фичи плана остаются доступны под исходными именами.
+  it('текущая подписка отдаёт поля подписки, а не плана (B25)', async () => {
     const ctx = await createOwnerWithNursery();
+    const sub = await db('subscriptions')
+      .where({ account_id: ctx.account.id })
+      .whereIn('status', ['trial', 'active'])
+      .orderBy('created_at', 'desc')
+      .first();
+    const plan = await db('plans').where({ id: sub.plan_id }).first();
+
     const res = await api().get('/api/subscriptions/current').set('Cookie', ctx.cookie);
     expect(res.status).toBe(200);
-    expect(res.body.status).toBeTruthy();
-    expect(res.body.plant_limit).toBeDefined();
+    // id — подписки, а не плана
+    expect(res.body.id).toBe(sub.id);
+    expect(res.body.id).not.toBe(sub.plan_id);
+    expect(res.body.plan_id).toBe(plan.id);
+    // статус подписки (trial/active), а не поле плана
+    expect(['trial', 'active']).toContain(res.body.status);
+    // обратная совместимость: лимиты/фичи плана под исходными именами
+    expect(res.body.plant_limit).toBe(plan.plant_limit);
+    expect(res.body.user_limit).toBe(plan.user_limit);
+    expect(res.body.name).toBe(plan.name);
   });
 
   it('список планов — только активные', async () => {

@@ -154,7 +154,9 @@ describe('M8 — Справочники', () => {
     expect(del.status).toBe(403);
   });
 
-  it('удаление используемого container type — мягкое (is_active=false)', async () => {
+  // B23: контейнер, используемый растениями, физически удалять нельзя (повисла бы ссылка
+  // на неактивный тип) — деактивируется (is_active=false), контракт приёмки M8#6.
+  it('удаление используемого container type — мягкое (деактивация)', async () => {
     const ctx = await createOwnerWithNursery();
     const ctBase = `/api/nurseries/${ctx.nurseryId}/container-types`;
     const create = await api()
@@ -172,7 +174,25 @@ describe('M8 — Справочники', () => {
     const del = await api().delete(`${ctBase}/${custom.id}`).set('Cookie', ctx.cookie);
     expect(del.status).toBe(200);
     const row = await db('container_types').where({ id: custom.id }).first();
+    // строка не удалена физически, но деактивирована
     expect(row.is_active).toBe(false);
+  });
+
+  // B23: неиспользуемый container type удаляется физически (строки в БД не остаётся).
+  it('удаление неиспользуемого container type — физическое (строка удалена)', async () => {
+    const ctx = await createOwnerWithNursery();
+    const ctBase = `/api/nurseries/${ctx.nurseryId}/container-types`;
+    const create = await api()
+      .post(ctBase)
+      .set('Cookie', ctx.cookie)
+      .send({ code: `CUST-${Date.now()}`, name: 'Unused Pot', container_kind: 'pot', volume_liters: 5 });
+    expect(create.status).toBe(201);
+    const custom = create.body;
+
+    const del = await api().delete(`${ctBase}/${custom.id}`).set('Cookie', ctx.cookie);
+    expect(del.status).toBe(200);
+    const row = await db('container_types').where({ id: custom.id }).first();
+    expect(row).toBeUndefined();
 
     const list = await api().get(ctBase).set('Cookie', ctx.cookie);
     expect(list.status).toBe(200);
