@@ -317,38 +317,57 @@ RBAC-механика в рантайме пока декоративна (B11).
 
 ### Незначительно
 
-- **B22.** `backend/src/routes/nursery.router.js:19, 23-28` — `PATCH /my` и `PATCH /:nurseryId`
+- **B22.** ✅ **Исправлено 2026-07-24** — `PATCH /:nurseryId` закрыт `requireRole(...STRUCTURE_ROLES)`;
+  `PATCH /my` гейтит роль в контроллере (owner без питомника → 404, observer с питомником → 403).
+  `backend/src/routes/nursery.router.js:19, 23-28` — `PATCH /my` и `PATCH /:nurseryId`
   без `requireRole`; при появлении staff-логина любой observer сможет переименовать питомник.
-- **B23.** `backend/src/services/dictionary.service.js:228-233` — обе ветки
+- **B23.** ✅ **Исправлено 2026-07-24** — используемый контейнер → soft-delete (`is_active=false`),
+  неиспользуемый → физическое удаление; `countUsedByPlants` осмыслен, контракт приёмки M8#6 сохранён.
+  `backend/src/services/dictionary.service.js:228-233` — обе ветки
   `if (used > 0) ... else ...` в `deleteContainerType` идентичны, вызов `countUsedByPlants` бессмыслен.
-- **B24.** `backend/src/services/dictionary.service.js:236-240` — мёртвый код `ensureStructureRole`.
-- **B25.** `backend/src/repositories/subscription.repository.js:27` —
+- **B24.** ✅ **Исправлено 2026-07-24** — мёртвый `ensureStructureRole` удалён.
+  `backend/src/services/dictionary.service.js:236-240` — мёртвый код `ensureStructureRole`.
+- **B25.** ✅ **Исправлено 2026-07-24** — select «флипнут» (`plans.*` перед `subscriptions.*`):
+  id/created_at подписки выигрывают на коллизии, поля плана остаются под родными именами.
+  `backend/src/repositories/subscription.repository.js:27` —
   `select('subscriptions.*', 'plans.*')`: поля плана перезаписывают поля подписки,
   `/api/subscriptions/current` возвращает id плана вместо id подписки.
-- **B26.** `backend/src/middlewares/validate.js:3` — валидируется только body; невалидные UUID
+- **B26.** ✅ **Исправлено 2026-07-24** — `errorHandler` мапит Postgres `22P02` → 400;
+  тест `backend/tests/paramValidation.test.js`.
+  `backend/src/middlewares/validate.js:3` — валидируется только body; невалидные UUID
   в `:id`-параметрах дают `22P02` от Postgres и 500 вместо 400.
-- **B27.** `backend/src/services/nursery.service.js:47` — пароль owner-заглушки из
+- **B27.** ✅ **Исправлено 2026-07-24** — пароль owner-заглушки через `crypto.randomBytes`.
+  `backend/src/services/nursery.service.js:47` — пароль owner-заглушки из
   `Math.random().toString(36)` — некриптографическая энтропия; использовать `crypto.randomBytes`.
-- **B28.** `backend/src/services/plant.service.js:81-103, 184-194` — в bulk-создании
+- **B28.** ✅ **Исправлено 2026-07-24** — numeric_code уникален внутри bulk-партии + `logActivity` для bulk.
+  `backend/src/services/plant.service.js:81-103, 184-194` — в bulk-создании
   уникальность numeric_code проверяется только по БД, не внутри партии (близкие `Date.now()`
   → коллизия → 409 на весь батч); нет `logActivity` для bulk.
-- **B29.** `backend/src/config/logger.js:6` — в production уровень `warn` (бизнес-события
+- **B29.** ⏸ **Отложено 2026-07-24** (инфра — отдельным заходом вместе с B20/B34).
+  `backend/src/config/logger.js:6` — в production уровень `warn` (бизнес-события
   `info` теряются); `:14-15` — файлы `logs/*` в контейнере не персистентны;
   `backend/app.js:34-36` — morgan `'dev'` и в проде.
-- **B30.** `backend/src/constants/auth.constants.js:3-7` — refresh-cookie без `path: '/api/auth'`,
+- **B30.** ✅ **Исправлено 2026-07-24** — refresh-cookie получил `path: '/api/auth'` (`REFRESH_COOKIE_OPTIONS`).
+  `backend/src/constants/auth.constants.js:3-7` — refresh-cookie без `path: '/api/auth'`,
   отправляется на каждый запрос.
-- **B31.** `backend/src/middlewares/requireAuth.js:5-17` — не проверяет `is_active`; после
+- **B31.** ✅ **Исправлено 2026-07-24** — `requireAuth` сверяет `users.is_active` (деактивированный → 401,
+  не ждёт истечения токена); токены без существующего `userId` проходят (не-найден → не отклоняем).
+  `backend/src/middlewares/requireAuth.js:5-17` — не проверяет `is_active`; после
   `changeRole`/`toggleStatus` старый access-токен действует до 15 минут.
-- **B32.** `backend/src/routes/plant.router.js:41` (restore), `movement.router.js:21` (delete) —
+- **B32.** ✅ **Исправлено 2026-07-24** — гейт роли restore/deleteMovement перенесён в middleware (`requireRole`).
+  `backend/src/routes/plant.router.js:41` (restore), `movement.router.js:21` (delete) —
   проверка роли спрятана в сервисе, а не в middleware, вразрез с общим паттерном.
-- **B33.** `backend/app.js:53` — маршрут-сирота `GET /api/plans` дублирует
+- **B33.** ✅ **Исправлено 2026-07-24** — `GET /api/plans` вынесен в `plans.router.js`, инлайн из app.js убран.
+  `backend/app.js:53` — маршрут-сирота `GET /api/plans` дублирует
   `GET /api/subscriptions/plans` мимо роутеров.
-- **B34.** `docker-compose.yml:7-9` — хардкод креденшалов БД + проброс 5433 наружу; вынести в env.
+- **B34.** ⏸ **Отложено 2026-07-24** (инфра — отдельным заходом вместе с B20/B29).
+  `docker-compose.yml:7-9` — хардкод креденшалов БД + проброс 5433 наружу; вынести в env.
 - **B35.** ✅ **Исправлено 2026-07-24** (попутно с B10) — `checkUserLimit` использует
   `userRepo.countByNursery` вместо загрузки всех строк.
   `backend/src/services/staff.service.js:118` — `checkUserLimit` тянет все строки
   через `findAllByNursery` вместо count-запроса.
-- **B36.** Устаревшая документация схемы — см. D3 (общая находка с БД).
+- **B36.** ✅ **Снято 2026-07-24 (через D3)** — `schema.sql` реконструирован и синхронизирован.
+  Устаревшая документация схемы — см. D3 (общая находка с БД).
 
 ---
 
@@ -495,33 +514,43 @@ RBAC-механика в рантайме пока декоративна (B11).
 
 ### Незначительно
 
-- **F15.** `frontend/public/sw.js:10-12` — `CacheFirst 'static-v1'` без ExpirationPlugin:
+- **F15.** ✅ **Исправлено 2026-07-24** — рост статик-кэша SW ограничен (обрезка старых записей).
+  `frontend/public/sw.js:10-12` — `CacheFirst 'static-v1'` без ExpirationPlugin:
   бандлы старых деплоев копятся бессрочно.
-- **F16.** `frontend/src/composables/useOnlineStatus.js:14-22` — вызывается внутри actions
+- **F16.** ✅ **Исправлено 2026-07-24** — модульный синглтон онлайн-статуса, живой внутри Pinia-actions (без `onMounted`).
+  `frontend/src/composables/useOnlineStatus.js:14-22` — вызывается внутри actions
   Pinia (`plants.store.js:252`, `operations.store.js:51`, `movements.store.js:50`):
   `onMounted` вне setup не сработает, `isOnline` там — разовый снапшот `navigator.onLine`.
-- **F17.** `frontend/src/stores/movements.store.js:109-129` — `deleteMovement` без
+- **F17.** ✅ **Исправлено 2026-07-24** — офлайн-ветка `delete_movement` + `applyMovementToPlant` офлайн + сохранение полей formData.
+  `frontend/src/stores/movements.store.js:109-129` — `deleteMovement` без
   офлайн-ветки, хотя `delete_movement` объявлен и обрабатывается в syncManager; офлайн-ветка
   `createMovement` не применяет `applyMovementToPlant` — статус/локация растения офлайн не
   обновляются; `localOperation` (`operations.store.js:90-97`) теряет поля formData.
-- **F18.** `frontend/src/services/syncQueue.service.js` — файл-обёртка целиком мёртвый код
+- **F18.** ✅ **Исправлено 2026-07-24** — мёртвый `services/syncQueue.service.js` удалён (снимает T15).
+  `frontend/src/services/syncQueue.service.js` — файл-обёртка целиком мёртвый код
   (никем не импортируется); статусы `PROCESSING/DONE` из `constants/syncQueue.constants.js:12-14`
   не используются. Дублирует имя с `db/syncQueue.service.js` — риск рассинхронизации (см. T15).
-- **F19.** `frontend/src/stores/auth.store.js:36-37, 81-96` — токенный код мёртв
+- **F19.** ✅ **Исправлено 2026-07-24** — мёртвый токенный код + Authorization-ветка `http.js` удалены (аутентификация cookie-based).
+  `frontend/src/stores/auth.store.js:36-37, 81-96` — токенный код мёртв
   (аутентификация cookie-based), при этом refresh-токен хранился бы в localStorage —
   удалить вместе с Authorization-веткой `http.js:50-52`.
-- **F20.** `frontend/src/stores/notifications.store.js:84-86` — поллинг каждые 60 с
+- **F20.** ✅ **Исправлено 2026-07-24** — поллинг уведомлений останавливается офлайн + `error` в state.
+  `frontend/src/stores/notifications.store.js:84-86` — поллинг каждые 60 с
   продолжается офлайн; `state.error` нигде не отображается.
-- **F21.** `frontend/src/pages/scanner/components/QrScanner.vue:41-60` — при размонтировании
+- **F21.** ✅ **Исправлено 2026-07-24** — стрим камеры чистится при размонтировании; `props.active` под `watch`.
+  `frontend/src/pages/scanner/components/QrScanner.vue:41-60` — при размонтировании
   до резолва `decodeFromVideoDevice` стрим камеры утекает; `props.active` без `watch`.
-- **F22.** `frontend/src/stores/nursery.store.js:158-165` — `resetState` не сбрасывает `nurseryError`.
+- **F22.** ✅ **Исправлено 2026-07-24** — `resetState` сбрасывает `nurseryError`.
+  `frontend/src/stores/nursery.store.js:158-165` — `resetState` не сбрасывает `nurseryError`.
 - **F23.** ⏸ **Отложено 2026-07-24** (крупный рефактор при слабом покрытии Vue-компонентов —
   форсировать рискованно). `frontend/src/pages/catalog/CatalogPage.vue` — 532 строки, крупнейший компонент
   (4 секции справочников инлайн); `LocationsPage.vue` — 407 строк.
-- **F24.** `PlantsPage.vue:27-37` + `plants.store.js:32-74` — DataTable в режиме `lazy`
+- **F24.** ✅ **Исправлено 2026-07-24** — lazy DataTable получает серверную страницу без повторной клиентской фильтрации.
+  `PlantsPage.vue:27-37` + `plants.store.js:32-74` — DataTable в режиме `lazy`
   получает `:value="plantsStore.filtered"`: клиентский getter повторно фильтрует серверную
   страницу, `totalRecords` может не совпадать с числом строк.
-- **F25.** `AppLayout.vue:87-96` — мёртвые пункты меню с `visible: false`, продублированные
+- **F25.** ✅ **Исправлено 2026-07-24** — мёртвые пункты меню убраны; `/health`-пинг подчищен.
+  `AppLayout.vue:87-96` — мёртвые пункты меню с `visible: false`, продублированные
   в админ-секции; `main.js:45` — `http.get('/health').catch(() => {})` с проглоченной ошибкой.
 
 ---
@@ -613,7 +642,7 @@ RBAC-механика в рантайме пока декоративна (B11).
 
 ### Незначительно
 
-- **D9. Дублирующие/избыточные индексы** (лишняя запись при INSERT/UPDATE в самой горячей таблице):
+- **D9. Дублирующие/избыточные индексы** ✅ **Исправлено 2026-07-24** — миграция `20260724180000` сняла дубли (обратима). Было (лишняя запись при INSERT/UPDATE в самой горячей таблице):
   `init:225-226` (`idx_plants_qr`, `idx_plants_numeric_code` дублируют UNIQUE);
   `init:223` (`idx_plants_nursery` перекрыт `idx_plants_active`);
   `init:243` (`idx_plant_tags_plant` дублирует префикс PK);
@@ -621,19 +650,25 @@ RBAC-механика в рантайме пока декоративна (B11).
   одиночные индексы по `nursery_id`, дублирующие префикс составных unique: `init:232, 236`,
   `20260614140000:49, 52`, `20260409110000:122`;
   `init:246` (`idx_users_role` — низкая кардинальность, запросов по нему нет).
-- **D10. FK-колонки с ON DELETE-политикой без индекса** — `subscriptions.plan_id` (init:36),
+- **D10. FK-колонки с ON DELETE-политикой без индекса** ✅ **Исправлено 2026-07-24** (миграция `20260724180000` — добавлены индексы operations/movements/plant_stage_history/accounts) — `subscriptions.plan_id` (init:36),
   `operations.user_id` (init:178), `movements.user_id/from_location_id/to_location_id`
   (init:199-202), `plant_stage_history.stage_id/changed_by` (20260614140000:32-33),
   `accounts.last_active_nursery_id` (20260614120000:4-8). Для operations/movements стоит добавить.
-- **D11. Отсутствующие UNIQUE в пределах питомника** — `tags` без `UNIQUE(nursery_id, name)`
+- **D11. Отсутствующие UNIQUE в пределах питомника** ✅ **Исправлено 2026-07-24** (миграция
+  `20260724181000` — partial-UNIQUE `tags(nursery_id, name)`/`users(nursery_id, email)`; на проде с дублями нужна дедупликация) — `tags` без `UNIQUE(nursery_id, name)`
   (init:100-109); `users` без `UNIQUE(nursery_id, email)` (init:63).
-- **D12. Нет partial-unique «одна активная подписка на аккаунт»** — `idx_subscriptions_active`
+- **D12. Нет partial-unique «одна активная подписка на аккаунт»** ✅ **Исправлено 2026-07-24**
+  (миграция `20260724181000` — `uq_subscriptions_active_account WHERE status='active'`; дедупликация на проде) — `idx_subscriptions_active`
   (init:240-242) не UNIQUE; БД допускает две строки `active` на аккаунт.
-- **D13. stage_labor_norms без CHECK** — `norm_minutes` без `CHECK (> 0)`, `operation_type`
+- **D13. stage_labor_norms без CHECK** ✅ **Исправлено 2026-07-24** (миграция `20260724181000` —
+  CHECK `norm_minutes > 0` + `operation_type` по списку) — `norm_minutes` без `CHECK (> 0)`, `operation_type`
   без CHECK по списку (20260614140000:42-43).
-- **D14. down-миграция сломается на данных** — `20260614150000:14-19` повторно вешает узкий
+- **D14. down-миграция сломается на данных** ✅ **Исправлено 2026-07-24** (защитный down в
+  `20260614150000` — не роняет узкий CHECK на данных `change_stage`) — `20260614150000:14-19` повторно вешает узкий
   CHECK; при наличии строк `type='change_stage'` ALTER упадёт.
-- **D15. accounts.last_active_nursery_id без проверки принадлежности** (20260614120000:2-9) —
+- **D15. accounts.last_active_nursery_id без проверки принадлежности** ✅ **Исправлено 2026-07-24** —
+  миграция `20260724182000`: составной FK `accounts(id, last_active_nursery_id) → nurseries(account_id, id)
+  ON DELETE SET NULL` (+ `UNIQUE(account_id, id)` на nurseries). Было (20260614120000:2-9) —
   на уровне БД может указывать на питомник чужого аккаунта.
 - **D16. locations.parent_id ON DELETE SET NULL** ⏸ **Отложено 2026-07-24** — RESTRICT на
   self-FK ломает штатный каскад `accounts → nurseries → locations`; orphaning секций/рядов уже
@@ -734,17 +769,26 @@ RBAC-механика в рантайме пока декоративна (B11).
 
 ### Незначительно
 
-- **T11.** README.md устарел: «130 тестов» при фактических 160; цифры покрытия записаны до
+- **T11.** ✅ **Исправлено 2026-07-24** — README без хрупкого числа тестов; пороги покрытия CI указаны как источник истины.
+  README.md устарел: «130 тестов» при фактических 160; цифры покрытия записаны до
   трёх v2-этапов.
-- **T12.** `backend/src/utils/cleanupCron.js` исключён из coverage (vitest.config.js) —
+- **T12.** ✅ **Исправлено 2026-07-24** — `backend/tests/cronJobs.test.js` (мок node-cron) покрывает
+  cleanupCron+subscriptionCron; исключения из coverage сняты (cleanupCron 100%).
+  `backend/src/utils/cleanupCron.js` исключён из coverage (vitest.config.js) —
   cron-обвязка не тестируется никак (сервисная функция очистки покрыта).
-- **T13.** RBAC-матрица неполная: выборочные негативы есть, но не «каждая роль × каждый
+- **T13.** ✅ **Исправлено 2026-07-24** — `backend/tests/rbacMatrix.test.js`: табличный `it.each`
+  по матрице ролей × эндпоинтов + notifications-негативы.
+  RBAC-матрица неполная: выборочные негативы есть, но не «каждая роль × каждый
   эндпоинт»; для notifications role-негативов нет; worker-негатив в dictionary спрятан в
   двусмысленном `[400, 403]`. *Исправление:* табличный `it.each` по матрице.
-- **T14.** auth.test.js — 0 обращений к `res.body`: не проверяется отсутствие
+- **T14.** ✅ **Исправлено 2026-07-24** — проверки тела ответа: нет `password_hash` в логине,
+  битый токен → 401, refresh-cookie `path=/api/auth`, деактивированный staff-токен → 401.
+  auth.test.js — 0 обращений к `res.body`: не проверяется отсутствие
   `password_hash` в ответах (актуально — см. B17); нет тестов reuse refresh-токена после
   logout и истёкшего access-токена.
-- **T15.** Два одноимённых файла очереди — `frontend/src/services/syncQueue.service.js`
+- **T15.** ✅ **Снято 2026-07-24 (через F18)** — мёртвый `services/syncQueue.service.js` удалён,
+  коллизия имён устранена.
+  Два одноимённых файла очереди — `frontend/src/services/syncQueue.service.js`
   (мёртвый shim) и `frontend/src/db/syncQueue.service.js` — без единого теста; при
   рефакторинге легко рассинхронизировать (см. F18).
 
