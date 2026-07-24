@@ -100,10 +100,6 @@ export const useMovementsStore = defineStore('movements', {
       } finally {
         this.isLoading = false
       }
-    },
-
-    async syncPending() {
-      return null
     }
   }
 })

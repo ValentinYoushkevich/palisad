@@ -1,6 +1,7 @@
 import db from '@/config/knex.js';
 import logger from '@/config/logger.js';
 import { startCleanupCron } from '@/utils/cleanupCron.js';
+import { startSubscriptionCron } from '@/utils/subscriptionCron.js';
 import 'dotenv/config';
 import app from './app.js';
 
@@ -14,6 +15,7 @@ async function start() {
     app.listen(PORT, () => {
       logger.info(`Server running on port ${PORT}`);
       startCleanupCron();
+      startSubscriptionCron();
       logger.info('Cleanup cron started');
     });
   } catch (err) {

@@ -35,7 +35,7 @@ export async function refresh(req, res, next) {
 export async function changePassword(req, res, next) {
   try {
     await authService.changePassword(
-      req.user.accountId,
+      req.user,
       req.body.currentPassword,
       req.body.newPassword
     );

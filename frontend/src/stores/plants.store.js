@@ -322,10 +322,6 @@ export const usePlantsStore = defineStore('plants', {
         search: '',
         numericCode: ''
       }
-    },
-
-    async syncPending() {
-      return null
     }
   }
 })

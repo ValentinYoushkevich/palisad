@@ -63,9 +63,25 @@ export async function attachPhoto(req, res, next) {
       plantId: req.params.plantId,
       operationId: req.params.id,
       accountId: req.user.accountId,
-      url: req.body.url,
+      file: req.file,
     });
     return res.status(201).json(photo);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function getPhotoContent(req, res, next) {
+  try {
+    const photo = await operationService.getPhotoContent({
+      nurseryId: req.params.nurseryId,
+      plantId: req.params.plantId,
+      operationId: req.params.id,
+      photoId: req.params.photoId,
+    });
+    res.setHeader('Content-Type', photo.mime_type);
+    res.setHeader('Cache-Control', 'private');
+    return res.status(200).send(photo.image);
   } catch (err) {
     return next(err);
   }

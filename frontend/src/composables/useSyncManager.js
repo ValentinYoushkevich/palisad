@@ -2,6 +2,7 @@ import { getPendingPhotos, markPhotoDone, markPhotoFailed } from '@/db/pendingPh
 import { getById, getFailedCount, getPending, markDone, markFailed, reconcileLocalId } from '@/db/syncQueue.service'
 import http from '@/services/http'
 import { useNurseryStore } from '@/stores/nursery.store'
+import { photoFileName } from '@/utils/imageDownscale'
 import { useToast } from 'primevue/usetoast'
 import { ref } from 'vue'
 
@@ -140,9 +141,16 @@ async function processPhotoItem(item) {
       return
     }
 
+    // Мультипарт (поле `file`), а не JSON: Blob уже даунскейлен на этапе savePhoto. Раньше
+    // здесь слался { url: pending.blob } — File сериализовался JSON-ом в {} и данные
+    // терялись by design (F13). operationId уже реконсилен create_operation'ом на серверный
+    // id (non-photo элементы прогоняются до фото), поэтому фото попадает в нужную операцию.
+    const formData = new FormData()
+    formData.append('file', pending.blob, photoFileName(pending.mime_type || pending.blob?.type))
+
     await http.post(
       `/nurseries/${nurseryId}/plants/${payload.plantId}/operations/${payload.operationId}/photos`,
-      { url: pending.blob }
+      formData
     )
 
     await markPhotoDone(pending.localId)

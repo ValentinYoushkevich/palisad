@@ -1,10 +1,11 @@
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import db from '@/db/indexedDb'
-import { getPendingPhotos, markPhotoDone, markPhotoFailed, savePhoto } from '@/db/pendingPhotos.service'
+import { savePhoto } from '@/db/pendingPhotos.service'
 import { addToQueue } from '@/db/syncQueue.service'
 import http from '@/services/http'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { usePlantsStore } from '@/stores/plants.store'
+import { downscaleImage, photoFileName } from '@/utils/imageDownscale'
 import { defineStore } from 'pinia'
 
 const CLOSED_STATUSES = new Set(['sold', 'written_off'])
@@ -145,22 +146,31 @@ export const useOperationsStore = defineStore('operations', {
 
     async attachPhoto(operationId, plantId, file) {
       const { isOnline } = useOnlineStatus()
+      const nurseryStore = useNurseryStore()
       this.operationsError = ''
 
       try {
+        // Даунскейл на клиенте до отправки/сохранения — единая точка для онлайн и офлайн (F13).
+        const blob = await downscaleImage(file)
+
         if (isOnline.value) {
-          const nurseryStore = useNurseryStore()
+          // Мультипарт (поле `file`), а не JSON: File нельзя сериализовать в тело JSON.
+          const formData = new FormData()
+          formData.append('file', blob, photoFileName(blob.type))
           const response = await http.post(
             `/nurseries/${nurseryStore.nurseryId}/plants/${plantId}/operations/${operationId}/photos`,
-            { url: file }
+            formData
           )
+          // Тянем свежие метаданные фото (у операции обновится массив photos без байтов).
+          await this.fetchOperations(plantId)
           return { ok: true, data: response?.data || null }
         }
 
-        const nurseryStore = useNurseryStore()
-        const localId = await savePhoto(operationId, file)
+        // Офлайн: Blob в pending_photos + attach_photo в очередь. operationId может быть
+        // local_ — reconcileLocalId переправит его на серверный id при синке (F8).
+        const localId = await savePhoto(operationId, blob)
         await addToQueue('attach_photo', { operationId, plantId, nurseryId: nurseryStore.nurseryId, localId })
-        return { ok: true }
+        return { ok: true, local: true }
       } catch (error) {
         this.operationsError = error?.response?.data?.error || 'Не удалось прикрепить фото.'
         return { ok: false, error: this.operationsError }
@@ -180,22 +190,6 @@ export const useOperationsStore = defineStore('operations', {
       } catch (error) {
         this.operationsError = error?.response?.data?.error || 'Не удалось удалить фото.'
         return { ok: false, error: this.operationsError }
-      }
-    },
-
-    async syncPending() {
-      const pendingPhotos = await getPendingPhotos()
-
-      for (const photo of pendingPhotos) {
-        if (!photo?.localId) {
-          continue
-        }
-
-        try {
-          await markPhotoDone(photo.localId)
-        } catch {
-          await markPhotoFailed(photo.localId)
-        }
       }
     }
   }

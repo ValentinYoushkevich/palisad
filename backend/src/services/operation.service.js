@@ -12,7 +12,23 @@ import { checkFeature } from '@/utils/planGuards.js';
 
 export async function getOperations(nurseryId, plantId) {
   await requirePlantInNursery(nurseryId, plantId);
-  return operationRepo.findByPlant(plantId);
+  const operations = await operationRepo.findByPlant(plantId);
+  // Каждая операция несёт метаданные своих фото (без байтов). Тянем одним запросом
+  // по всем id операций и группируем, чтобы не плодить N+1.
+  const photos = await photoRepo.findMetaByOperationIds(operations.map((op) => op.id));
+  const byOperation = new Map();
+  for (const photo of photos) {
+    const list = byOperation.get(photo.operation_id) ?? [];
+    list.push({
+      id: photo.id,
+      mime_type: photo.mime_type,
+      size: photo.size,
+      created_at: photo.created_at,
+    });
+    byOperation.set(photo.operation_id, list);
+  }
+
+  return operations.map((op) => ({ ...op, photos: byOperation.get(op.id) ?? [] }));
 }
 
 export async function createOperation({
@@ -91,11 +107,23 @@ export async function softDelete({ nurseryId, plantId, id, userId, userRole }) {
   return true;
 }
 
-export async function attachPhoto({ nurseryId, plantId, operationId, accountId, url }) {
+// Приём фото как файла: file = { buffer, mimetype, size } (multer memoryStorage).
+// Валидация mime/размера выполняется на уровне multer (см. роут) — закрывает B18.
+// Байты сохраняем в photos.image (bytea); наружу возвращаем только метаданные.
+export async function attachPhoto({ nurseryId, plantId, operationId, accountId, file }) {
   await checkFeature(accountId, 'feature_photos');
   await requirePlantInNursery(nurseryId, plantId);
   const operation = await requireOperation(plantId, operationId);
-  const photo = await photoRepo.create({ operation_id: operationId, url });
+  if (!file) {
+    throw new AppError('Файл обязателен', 400);
+  }
+
+  const photo = await photoRepo.create({
+    operation_id: operationId,
+    image: file.buffer,
+    mime_type: file.mimetype,
+    size: file.size,
+  });
   const plant = await plantRepo.findById(plantId);
   if (plant) {
     await logActivity({
@@ -107,6 +135,20 @@ export async function attachPhoto({ nurseryId, plantId, operationId, accountId, 
       details: { photoId: photo.id },
     });
   }
+  return photo;
+}
+
+// Отдаёт байты фото для стрим-эндпоинта. Те же tenant-гарды, что и у прочих
+// вложенных ресурсов: фото чужой операции/питомника → 404 (через requireOperation
+// и проверку operation_id).
+export async function getPhotoContent({ nurseryId, plantId, operationId, photoId }) {
+  await requirePlantInNursery(nurseryId, plantId);
+  await requireOperation(plantId, operationId);
+  const photo = await photoRepo.findByIdForStream(photoId);
+  if (!photo || photo.operation_id !== operationId) {
+    throw new AppError('Фото не найдено', 404);
+  }
+
   return photo;
 }
 

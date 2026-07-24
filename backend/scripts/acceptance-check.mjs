@@ -17,6 +17,17 @@ const db = knexFactory(knexConfig.development ?? knexConfig);
 const BASE = 'http://localhost:3100/api';
 const results = [];
 
+// Минимальный валидный 1×1 PNG для проверки загрузки фото (F13: multipart + bytea).
+const PNG_1x1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64'
+);
+function photoForm() {
+  const form = new FormData();
+  form.append('file', new Blob([PNG_1x1], { type: 'image/png' }), 'photo.png');
+  return form;
+}
+
 function check(module, num, name, pass, note = '') {
   results.push({ module, num, name, pass, note });
   console.log(`${pass ? 'PASS' : 'FAIL'}  M${module}#${num} ${name}${note ? ` — ${note}` : ''}`);
@@ -42,14 +53,15 @@ function applySetCookies(jar, headers) {
   }
 }
 
-async function req(jar, method, path, body, { raw = false } = {}) {
+async function req(jar, method, path, body, { raw = false, form } = {}) {
   const headers = {};
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  // form (multipart) — fetch сам проставит Content-Type с boundary; JSON — вручную.
+  if (form === undefined && body !== undefined) headers['Content-Type'] = 'application/json';
   if (jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
   const res = await fetch(BASE + path, {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: form !== undefined ? form : body !== undefined ? JSON.stringify(body) : undefined,
   });
   const setCookies = res.headers.getSetCookie?.() ?? [];
   applySetCookies(jar, res.headers);
@@ -66,8 +78,9 @@ async function req(jar, method, path, body, { raw = false } = {}) {
   return { status: res.status, data, setCookies, contentType: res.headers.get('content-type') };
 }
 
-// Сессия с подписанным сервером JWT для произвольной роли (staff не могут
-// логиниться через API — см. findings в documentation/tasks/MvpStabilization.md)
+// Сессия с подписанным сервером JWT для произвольной роли — быстрый форж без реального
+// логина. После B11 сотрудники УЖЕ могут логиниться через /auth/login (см. проверку
+// M17); forgeSession оставлен как удобный шорткат в прогоне.
 function forgeSession({ accountId, userId, nurseryId, role }) {
   const jar = newJar();
   jar.set('access_token', signAccess({ accountId, userId, nurseryId, role }));
@@ -165,8 +178,10 @@ async function main() {
   check(3, 1, 'Создание питомника создаёт owner-пользователя',
     r.status === 201 && !!ownerA, `status=${r.status}`);
 
+  // v2: несколько питомников на аккаунт разрешены до nursery_limit. На free-плане лимит = 1,
+  // поэтому второй питомник упирается в лимит → 403 (раньше, в одно-питомничьей модели, было 409).
   r = await req(jarA, 'POST', '/nurseries', { name: 'Second Nursery' });
-  check(3, 2, 'Повторное создание питомника → 409', r.status === 409, `status=${r.status}`);
+  check(3, 2, 'Второй питомник сверх nursery_limit (free=1) → 403', r.status === 403, `status=${r.status}`);
 
   // re-login: в JWT должен попасть nurseryId
   jarA = newJar();
@@ -198,6 +213,15 @@ async function main() {
 
   const worker = (await req(jarA, 'POST', `${P}/users`, { name: 'Accept Worker', role: 'worker', password: staffPass })).data;
   const observer = (await req(jarA, 'POST', `${P}/users`, { name: 'Accept Observer', role: 'observer', password: staffPass })).data;
+
+  // B11: сотрудник ТЕПЕРЬ входит через тот же /auth/login (раньше вход был только у владельца).
+  const staffJar = newJar();
+  r = await req(staffJar, 'POST', '/auth/login', { email: `agro.${ts}@palisad.test`, password: staffPass });
+  check(17, 1, 'B11: staff-логин через /auth/login → 200 + своя роль + mustChangePassword',
+    r.status === 200 && r.data?.user?.role === 'agronomist' && r.data?.mustChangePassword === true,
+    `status=${r.status}, role=${r.data?.user?.role}, mcp=${r.data?.mustChangePassword}`);
+  r = await req(newJar(), 'POST', '/auth/login', { email: `agro.${ts}@palisad.test`, password: 'WrongStaffPass1!' });
+  check(17, 2, 'B11: неверный пароль сотрудника → 401', r.status === 401, `status=${r.status}`);
 
   const usersCount = await db('users').where({ nursery_id: nid }).count('id as c').then((x) => Number(x[0].c));
   await setPlan({ user_limit: usersCount });
@@ -401,11 +425,15 @@ async function main() {
   r = await req(jarA, 'DELETE', `${OP}/${opByAgro.id}`);
   check(10, 4, 'Owner может удалить любую операцию', [200, 204].includes(r.status), `status=${r.status}`);
 
-  r = await req(jarA, 'POST', `${OP}/${op1.id}/photos`, { url: 'https://example.com/photo.jpg' });
+  r = await req(jarA, 'POST', `${OP}/${op1.id}/photos`, undefined, { form: photoForm() });
   check(10, 5, 'Фото требует feature_photos → 403', r.status === 403, `status=${r.status}`);
 
   await setPlan({ feature_photos: true });
-  const rPhoto = await req(jarA, 'POST', `${OP}/${op1.id}/photos`, { url: 'https://example.com/photo.jpg' });
+  // F13: загрузка мультипартом (поле file), хранение как bytea; ответ — метаданные без байтов.
+  const rPhoto = await req(jarA, 'POST', `${OP}/${op1.id}/photos`, undefined, { form: photoForm() });
+  const rPhotoContent = rPhoto.status === 201
+    ? await req(jarA, 'GET', `${OP}/${op1.id}/photos/${rPhoto.data.id}/content`, undefined, { raw: true })
+    : { status: 0, contentType: '' };
   await setPlan({ feature_photos: false });
 
   const ct2 = await db('container_types').where({ is_system: true, code: 'C2' }).first();
@@ -551,17 +579,20 @@ async function main() {
   }).returning('*');
   r = await req(jarA, 'POST', '/subscriptions/change', { planId: paidPlan.id });
   const oldSub = await db('subscriptions').where({ account_id: accA.id, plan_id: subA.plan_id }).orderBy('created_at', 'desc').first();
-  check(6, 3, 'Смена плана отменяет старую подписку',
-    [200, 201].includes(r.status) && oldSub?.status === 'cancelled', `status=${r.status}, old=${oldSub?.status}`);
+  check(6, 3, 'B12: смена плана отключена → 403, старая подписка не тронута',
+    r.status === 403 && oldSub?.status !== 'cancelled', `status=${r.status}, old=${oldSub?.status}`);
 
   r = await req(jarA, 'POST', '/subscriptions/change', { planId: '00000000-0000-4000-8000-000000000000' });
-  check(6, 6, 'Несуществующий planId → 404', r.status === 404, `status=${r.status}`);
+  check(6, 6, 'B12: смена плана недоступна для любого planId → 403', r.status === 403, `status=${r.status}`);
 
   check(6, 4, 'checkFeature блокирует фичу (403)', true, 'проверено через M8#3, M9#7, M10#1/#5, M12#1');
   check(6, 5, 'checkLimit блокирует лимит (403)', true, 'проверено через M5#2, M9#2');
 
   // smoke: фото criterion из smoke-сценария
   check(10, 99, '[smoke] Фото прикрепляется при feature_photos=true', rPhoto.status === 201, `status=${rPhoto.status}`);
+  check(10, 7, 'F13: GET фото /content отдаёт байты с image-Content-Type',
+    rPhotoContent.status === 200 && /^image\//.test(rPhotoContent.contentType || ''),
+    `status=${rPhotoContent.status}, ct=${rPhotoContent.contentType}`);
 
   // Чистка тестовых планов, возврат подписки на free
   await db('subscriptions').where({ account_id: accA.id }).del();

@@ -22,19 +22,22 @@
             <div class="text-sm text-gray-500">{{ formatDate(item.created_at) }}</div>
           </div>
 
-          <div v-if="item.photos?.length" class="mt-2 flex flex-wrap gap-2">
+          <div v-if="photosFor(item).length" class="mt-2 flex flex-wrap gap-2">
             <img
-              v-for="photo in item.photos"
-              :key="photo.id"
-              :src="photo.url"
+              v-for="photo in photosFor(item)"
+              :key="photo.key"
+              :src="photo.src"
               alt="operation"
               class="h-[60px] w-20 rounded object-cover"
+              :class="{ 'ring-1 ring-amber-300 opacity-70': photo.pending }"
+              :title="photo.title"
             >
           </div>
 
-          <div v-if="canEdit" class="mt-2 flex gap-1">
+          <div v-if="canEdit" class="mt-2 flex items-center gap-1">
             <Button class="ui-action-icon" icon="pi pi-pencil" severity="secondary" size="small" outlined @click="emit('edit', item)" />
             <Button class="ui-action-icon" icon="pi pi-trash" severity="danger" size="small" outlined @click="emit('delete', item)" />
+            <OperationPhotoCapture :busy="busyOperationId === item.id" @attach="(file) => handleAttach(item, file)" />
           </div>
         </div>
       </template>
@@ -43,9 +46,15 @@
 </template>
 
 <script setup>
+import { getPendingPhotos } from '@/db/pendingPhotos.service'
+import OperationPhotoCapture from '@/pages/plants/components/OperationPhotoCapture.vue'
+import { useNurseryStore } from '@/stores/nursery.store'
+import { useOperationsStore } from '@/stores/operations.store'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
+
 defineOptions({ name: 'OperationTimeline' })
 
-defineProps({
+const props = defineProps({
   operations: {
     type: Array,
     default: () => []
@@ -61,6 +70,83 @@ defineProps({
 })
 
 const emit = defineEmits(['edit', 'delete'])
+
+const nurseryStore = useNurseryStore()
+const operationsStore = useOperationsStore()
+
+// Локальные (ещё не синхронизированные) фото по operation_id → [{ localId, url }].
+// url — objectURL Blob'а из pending_photos; освобождаем при перезагрузке/размонтировании.
+const pendingByOperation = ref({})
+const objectUrls = []
+const busyOperationId = ref(null)
+
+// Синхронизированные фото показываем через content-эндпоинт (куки-сессия same-origin уходит
+// автоматически, в т.ч. для <img>). Метаданные фото теперь без url — строим src сами.
+function contentUrl(operation, photo) {
+  return `/api/nurseries/${nurseryStore.nurseryId}/plants/${operation.plant_id}/operations/${operation.id}/photos/${photo.id}/content`
+}
+
+function photosFor(operation) {
+  const synced = (operation.photos || []).map((photo) => ({
+    key: `srv-${photo.id}`,
+    src: contentUrl(operation, photo),
+    pending: false,
+    title: ''
+  }))
+  const local = (pendingByOperation.value[operation.id] || []).map((photo) => ({
+    key: `loc-${photo.localId}`,
+    src: photo.url,
+    pending: true,
+    title: 'Ожидает синхронизации'
+  }))
+  return [...synced, ...local]
+}
+
+function revokeObjectUrls() {
+  while (objectUrls.length) {
+    URL.revokeObjectURL(objectUrls.pop())
+  }
+}
+
+async function loadPendingPhotos() {
+  revokeObjectUrls()
+  const photos = await getPendingPhotos()
+  const grouped = {}
+
+  for (const photo of photos) {
+    if (!photo?.blob) {
+      continue
+    }
+    const url = URL.createObjectURL(photo.blob)
+    objectUrls.push(url)
+    if (!grouped[photo.operation_id]) {
+      grouped[photo.operation_id] = []
+    }
+    grouped[photo.operation_id].push({ localId: photo.localId, url })
+  }
+
+  pendingByOperation.value = grouped
+}
+
+async function handleAttach(operation, file) {
+  if (!file) {
+    return
+  }
+
+  busyOperationId.value = operation.id
+  try {
+    // attachPhoto сам даунскейлит и разводит онлайн/офлайн; онлайн-ветка ещё и обновит
+    // operations (метаданные). Перечитываем локальные pending, чтобы офлайн-фото показалось.
+    await operationsStore.attachPhoto(operation.id, operation.plant_id, file)
+    await loadPendingPhotos()
+  } finally {
+    busyOperationId.value = null
+  }
+}
+
+onMounted(loadPendingPhotos)
+onUnmounted(revokeObjectUrls)
+watch(() => props.operations, loadPendingPhotos)
 
 const TYPE_LABELS = {
   grafting: 'Прививка',

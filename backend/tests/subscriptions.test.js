@@ -37,7 +37,9 @@ describe('M6 — Подписки', () => {
     expect(plans.some((p) => p.id === inactive.id)).toBe(false);
   });
 
-  it('смена плана отменяет старую подписку', async () => {
+  // B12: смена тарифа отключена (self-service апгрейд без оплаты недопустим, биллинга нет).
+  // Эндпоинт остаётся смонтированным, но всегда 403 и без побочных эффектов.
+  it('смена тарифа недоступна → 403, старая подписка не тронута', async () => {
     const ctx = await createOwnerWithNursery();
     const oldSub = await db('subscriptions').where({ account_id: ctx.account.id }).first();
     const [paid] = await db('plans').insert(planRow()).returning('*');
@@ -45,18 +47,20 @@ describe('M6 — Подписки', () => {
       .post('/api/subscriptions/change')
       .set('Cookie', ctx.cookie)
       .send({ planId: paid.id });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
     const previous = await db('subscriptions').where({ id: oldSub.id }).first();
-    expect(previous.status).toBe('cancelled');
+    // подписка НЕ отменена: смена плана не выполняется вовсе.
+    expect(previous.status).toBe(oldSub.status);
   });
 
-  it('несуществующий planId → 404', async () => {
+  // Даже валидный, но неизвестный planId → 403 (гард B12 срабатывает до поиска плана).
+  it('смена тарифа: любой planId → 403', async () => {
     const ctx = await createOwnerWithNursery();
     const res = await api()
       .post('/api/subscriptions/change')
       .set('Cookie', ctx.cookie)
       .send({ planId: '00000000-0000-4000-8000-000000000000' });
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
   });
 
   it('GET /api/plans (alias) → 200', async () => {

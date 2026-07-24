@@ -47,6 +47,77 @@ export function clearMustChangePassword(accountId) {
     });
 }
 
+// B11: staff-логин. POST /api/auth/login не знает заранее, чей это email —
+// аккаунта-владельца или сотрудника, поэтому ищем активного сотрудника ГЛОБАЛЬНО
+// (среди всех питомников всех аккаунтов). account_id нужен для JWT/planGuards —
+// достаём его join'ом с nurseries. password_hash отдаём ТОЛЬКО для внутренней
+// проверки пароля в auth.service; наружу он не уходит (mapAuthUser его не включает).
+//
+// ДОПУЩЕНИЕ (B11): email активного сотрудника считаем ГЛОБАЛЬНО УНИКАЛЬНЫМ среди
+// строк с is_active=true. БД этого не гарантирует (уникального индекса на users.email
+// нет). Поэтому если вдруг найдётся несколько активных сотрудников с одинаковым
+// email, выбираем детерминированно — самого раннего по created_at (id как tie-break),
+// — чтобы результат логина был воспроизводимым, а не зависел от порядка выборки.
+export function findActiveByEmail(email) {
+  return db('users')
+    .join('nurseries', 'users.nursery_id', 'nurseries.id')
+    .where('users.email', email)
+    .andWhere('users.is_active', true)
+    .orderBy('users.created_at', 'asc')
+    .orderBy('users.id', 'asc')
+    .select(
+      'users.id',
+      'users.nursery_id',
+      'users.name',
+      'users.role',
+      'users.email',
+      'users.is_active',
+      'users.must_change_password',
+      'users.password_hash',
+      'users.created_at',
+      'nurseries.account_id'
+    )
+    .first();
+}
+
+// B11: восстановление staff-сессии при refresh по userId из refresh-токена. Фильтр
+// is_active=true намеренный: деактивированный владельцем сотрудник не продлит сессию
+// (на следующем refresh его выкинет в 401). account_id — тем же join'ом.
+export function findActiveById(id) {
+  return db('users')
+    .join('nurseries', 'users.nursery_id', 'nurseries.id')
+    .where('users.id', id)
+    .andWhere('users.is_active', true)
+    .select(
+      'users.id',
+      'users.nursery_id',
+      'users.name',
+      'users.role',
+      'users.email',
+      'users.is_active',
+      'users.must_change_password',
+      'nurseries.account_id'
+    )
+    .first();
+}
+
+// B11: смена пароля залогиненным сотрудником правит ИМЕННО его строку в users
+// (owner-флоу правит accounts.password_hash; здесь — users.password_hash).
+export function updatePassword(id, passwordHash) {
+  return db('users')
+    .where({ id })
+    .update({ password_hash: passwordHash, updated_at: db.fn.now() });
+}
+
+// B11: снимаем must_change_password у КОНКРЕТНОГО сотрудника (по users.id).
+// clearMustChangePassword выше чистит флаг только у owner-строк аккаунта и для staff
+// не подходит.
+export function clearMustChangePasswordById(id) {
+  return db('users')
+    .where({ id })
+    .update({ must_change_password: false, updated_at: db.fn.now() });
+}
+
 export function create(data, executor = db) {
   return executor('users')
     .insert(data)

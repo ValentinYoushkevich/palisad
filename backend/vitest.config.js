@@ -27,7 +27,12 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/**/*.js'],
       // Инфраструктура/данные и cron-обёртка вне интеграционного покрытия.
-      exclude: ['src/config/**', 'src/constants/**', 'src/utils/cleanupCron.js'],
+      exclude: [
+        'src/config/**',
+        'src/constants/**',
+        'src/utils/cleanupCron.js',
+        'src/utils/subscriptionCron.js',
+      ],
       reporter: ['text-summary', 'text'],
       // Строки/функции/стейтменты держим выше 90%. Ветки — 80% (остаток приходится
       // на защитные/практически недостижимые ветки: маппинг DB-ошибок, health-check,

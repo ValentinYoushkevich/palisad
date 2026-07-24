@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { api, createFullFixture, db, setFreePlan, systemContainerType } from './helpers.js';
 
+// Валидный 1x1 PNG для multipart-загрузки фото (фото хранятся как байты, F13).
+const PNG_1x1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64'
+);
+
 describe('M10 — Операции и фото', () => {
   let ctx;
   let plant;
@@ -46,7 +52,10 @@ describe('M10 — Операции и фото', () => {
   it('фото прикрепляется при feature_photos=true', async () => {
     const op = (await api().post(opBase).set('Cookie', ctx.cookie).send({ type: 'inspection' })).body;
     await setFreePlan({ feature_photos: true });
-    const res = await api().post(`${opBase}/${op.id}/photos`).set('Cookie', ctx.cookie).send({ url: 'https://example.com/p.jpg' });
+    const res = await api()
+      .post(`${opBase}/${op.id}/photos`)
+      .set('Cookie', ctx.cookie)
+      .attach('file', PNG_1x1, { filename: 'p.png', contentType: 'image/png' });
     expect(res.status).toBe(201);
   });
 

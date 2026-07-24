@@ -13,6 +13,8 @@
 --     nursery_species(id, nursery_id); UNIQUE (id, nursery_id) на родителях [миграция 20260724120000]
 --   - идемпотентность офлайн-очереди: operations.client_request_id и
 --     movements.client_request_id + частичные UNIQUE-индексы           [миграция 20260724130000]
+--   - фото операций как байты: photos.image (bytea), photos.mime_type, photos.size;
+--     photos.url → nullable (старый путь по URL выведен из использования) [миграция 20260724160000]
 -- Изменения v0.8:
 --   - виды: глобальный species_catalog + привязка nursery_species (вместо per-nursery species)
 --   - plants.nursery_species_id → FK на nursery_species (вместо plants.species_id → species)
@@ -375,10 +377,17 @@ CREATE TABLE operations (
   deleted_at        TIMESTAMPTZ
 );
 
+-- Фото привязаны к операции (photos.operation_id). Мелкие изображения хранятся
+-- как байты прямо в БД (image bytea); mime_type и size — метаданные для отдачи и
+-- списков. url оставлен nullable для совместимости, новый путь загрузки его не
+-- использует (v2, миграция 20260724160000).
 CREATE TABLE photos (
   id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   operation_id  UUID        NOT NULL REFERENCES operations(id) ON DELETE CASCADE,
-  url           TEXT        NOT NULL,
+  url           TEXT,       -- v2: nullable, выведен из использования (миграция 20260724160000)
+  image         BYTEA,      -- v2: байты изображения
+  mime_type     TEXT,       -- v2: Content-Type для стрим-эндпоинта
+  size          INTEGER,    -- v2: размер в байтах
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
