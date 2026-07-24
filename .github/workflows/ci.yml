@@ -1,0 +1,172 @@
+# CI монорепо «Палисад» — закрывает находку аудита T2 «Отсутствие CI».
+# Три независимых джоба: backend (линт + покрытие), frontend (линт + тесты + сборка),
+# acceptance (сквозной приёмочный прогон против поднятого сервера).
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────
+  # BACKEND — ESLint + vitest с порогами покрытия.
+  # Отдельный `npm run migrate` НЕ нужен: backend/tests/globalSetup.js сам
+  # подключается к базовой БД `palisad`, создаёт `palisad_test`, накатывает
+  # миграции и системный сид. Пороги покрытия (90/80) зашиты в vitest.config.js —
+  # `test:coverage` падает при недоборе сам, CI лишь вызывает его.
+  # ─────────────────────────────────────────────────────────────────────────
+  backend:
+    name: Backend (lint + coverage)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    # Env для импорта app и подключения к БД. vitest сам выставляет NODE_ENV=test
+    # и DB_NAME=palisad_test для тестов; базовую `palisad` создаёт PG service ниже.
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: palisad
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ci_test_secret
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: ci_test_refresh_secret
+      JWT_REFRESH_EXPIRES_IN: 7d
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: palisad
+        ports:
+          - 5432:5432
+        # Джоб стартует только когда БД реально принимает подключения.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Установка зависимостей
+        run: npm ci
+      # Backend-линт блокирующий: сейчас 0 ошибок (только варнинги).
+      - name: Линт
+        run: npm run lint
+      - name: Тесты с покрытием
+        run: npm run test:coverage
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # FRONTEND — ESLint (неблокирующий) + vitest (jsdom, без БД) + сборка Vite.
+  # ─────────────────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (lint + test + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Установка зависимостей
+        run: npm ci
+      # Неблокирующий: в страницах locations есть ~19 предсуществующих
+      # eslint-ошибок (известный техдолг вне scope). Без continue-on-error
+      # весь frontend-джоб был бы красным на старте. Убрать флаг после чистки.
+      - name: Линт (неблокирующий — известный техдолг)
+        run: npm run lint
+        continue-on-error: true
+      - name: Тесты
+        run: npm run test
+      - name: Сборка
+        run: npm run build
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # ACCEPTANCE — сквозной приёмочный прогон scripts/acceptance-check.mjs.
+  # Поднимает БД, накатывает миграции + сид, стартует реальный сервер на :3100
+  # и гоняет по нему приёмочные критерии. Контракт скрипта: process.exit(1)
+  # при любом FAIL — значит джоб краснеет при провале приёмки.
+  # ─────────────────────────────────────────────────────────────────────────
+  acceptance:
+    name: Acceptance (E2E smoke)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: palisad
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ci_test_secret
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: ci_test_refresh_secret
+      JWT_REFRESH_EXPIRES_IN: 7d
+      PORT: 3100
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: palisad
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Установка зависимостей
+        run: npm ci
+      # Здесь БД — реальная `palisad` (не тестовая): нужны и миграции, и сид,
+      # т.к. приёмка читает системные справочники (plans, movement_types и т.д.).
+      - name: Миграции
+        run: npm run migrate
+      - name: Сид
+        run: npm run seed
+      # Стартуем сервер в фоне; лог — в файл для диагностики при падении.
+      - name: Запуск backend в фоне (:3100)
+        run: |
+          npm start > /tmp/backend.log 2>&1 &
+          echo "BACKEND_PID=$!" >> "$GITHUB_ENV"
+      # Ждём, пока сервер начнёт отвечать (curl даёт exit 0 на любой HTTP-ответ,
+      # exit 7 — пока порт закрыт). До 60 попыток по 2с = ~2 минуты потолок.
+      - name: Ожидание готовности :3100
+        run: |
+          for i in $(seq 1 60); do
+            if curl -s -o /dev/null http://localhost:3100/; then
+              echo "Backend готов (попытка $i)"
+              exit 0
+            fi
+            echo "Ожидание backend... ($i/60)"
+            sleep 2
+          done
+          echo "::error::Backend не поднялся за отведённое время"
+          echo "----- backend.log -----"
+          cat /tmp/backend.log || true
+          exit 1
+      - name: Приёмочный прогон
+        run: node --loader ./alias-loader.mjs scripts/acceptance-check.mjs

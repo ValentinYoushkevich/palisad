@@ -37,10 +37,8 @@ describe('F2 — Идемпотентность офлайн-синхрониз�
       .set('Cookie', ctx.cookie)
       .send({ type: 'inspection', clientRequestId });
 
-    expect(first.status).toBeGreaterThanOrEqual(200);
-    expect(first.status).toBeLessThan(300);
-    expect(second.status).toBeGreaterThanOrEqual(200);
-    expect(second.status).toBeLessThan(300);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
     expect(second.body.id).toBe(first.body.id);
 
     const rows = await db('operations').where({ plant_id: plant.id });
@@ -60,10 +58,8 @@ describe('F2 — Идемпотентность офлайн-синхрониз�
       .set('Cookie', ctx.cookie)
       .send({ typeId: transfer.id, clientRequestId });
 
-    expect(first.status).toBeGreaterThanOrEqual(200);
-    expect(first.status).toBeLessThan(300);
-    expect(second.status).toBeGreaterThanOrEqual(200);
-    expect(second.status).toBeLessThan(300);
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(201);
     expect(second.body.id).toBe(first.body.id);
 
     const rows = await db('movements').where({ plant_id: plant.id });

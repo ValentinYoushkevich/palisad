@@ -34,7 +34,7 @@ describe('M10 — Операции и фото', () => {
   it('owner может удалить любую операцию', async () => {
     const op = (await api().post(opBase).set('Cookie', ctx.agronomist.cookie).send({ type: 'pruning', notes: 'by agro' })).body;
     const res = await api().delete(`${opBase}/${op.id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(res.status);
+    expect(res.status).toBe(204);
   });
 
   it('фото требует feature_photos → 403', async () => {
@@ -61,7 +61,7 @@ describe('M10 — Операции и фото', () => {
   it('мягкое удаление операции — не в списке', async () => {
     const op = (await api().post(opBase).set('Cookie', ctx.cookie).send({ type: 'other', notes: 'to delete' })).body;
     const del = await api().delete(`${opBase}/${op.id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(del.status);
+    expect(del.status).toBe(204);
     const row = await db('operations').where({ id: op.id }).first();
     expect(row.deleted_at).not.toBeNull();
     const list = await api().get(opBase).set('Cookie', ctx.cookie);

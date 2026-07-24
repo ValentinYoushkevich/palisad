@@ -37,7 +37,7 @@ describe('M8 — Справочники (доп. ветки)', () => {
       .post(`/api/nurseries/${ctx.nurseryId}/species`)
       .set('Cookie', ctx.cookie)
       .send({ scientific_name: 'Acer platanoides', display_name_ru: 'Клён' });
-    expect([200, 201]).toContain(res.status);
+    expect(res.status).toBe(201);
   });
 
   it('update и delete вида', async () => {
@@ -50,7 +50,7 @@ describe('M8 — Справочники (доп. ветки)', () => {
     expect(upd.status).toBe(200);
 
     const del = await api().delete(`${base}/${id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(del.status);
+    expect(del.status).toBe(200);
     const row = await db('nursery_species').where({ id }).first();
     expect(row.is_active).toBe(false);
   });
@@ -68,7 +68,7 @@ describe('M8 — Справочники (доп. ветки)', () => {
     const ctx = await createOwnerWithNursery();
     vi.mocked(gbifClient.matchSpeciesByName).mockResolvedValueOnce({ confidence: 10, ...ACER });
     const res = await attach(ctx, { scientific_name: 'Acer platanoides', display_name_ru: 'Клён' });
-    expect([200, 201]).toContain(res.status);
+    expect(res.status).toBe(201);
   });
 
   it('attach: вид не найден в GBIF → 404', async () => {

@@ -150,7 +150,7 @@ describe('Этап 3 — Производственные стадии', () => {
       const stage = stages.find((s) => s.slug === 'propagation');
       await api().post(normsBase).set('Cookie', ctx.cookie).send({ stage_id: stage.id, operation_type: 'pruning', norm_minutes: 10 });
       const dup = await api().post(normsBase).set('Cookie', ctx.cookie).send({ stage_id: stage.id, operation_type: 'pruning', norm_minutes: 12 });
-      expect(dup.status).toBeGreaterThanOrEqual(400);
+      expect(dup.status).toBe(409);
     });
   });
 

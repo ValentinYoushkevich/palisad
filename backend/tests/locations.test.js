@@ -78,7 +78,7 @@ describe('M7 — Локации', () => {
     const base = `/api/nurseries/${ctx.nurseryId}/locations`;
     const area = (await api().post(base).set('Cookie', ctx.cookie).send({ name: 'Lonely', type: 'area' })).body;
     const res = await api().delete(`${base}/${area.id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(res.status);
+    expect(res.status).toBe(204);
   });
 
   it('список локаций → 200', async () => {

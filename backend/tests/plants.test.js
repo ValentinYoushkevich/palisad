@@ -57,7 +57,7 @@ describe('M9 — Реестр растений', () => {
     const ctx = await createOwnerWithNursery();
     const plant = (await createPlant(ctx)).body;
     const res = await api().delete(`${plantsBase(ctx)}/${plant.id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(res.status);
+    expect(res.status).toBe(200);
     const row = await db('plants').where({ id: plant.id }).first();
     expect(row).toBeTruthy();
     expect(row.deleted_at).not.toBeNull();
@@ -100,11 +100,11 @@ describe('M9 — Реестр растений', () => {
     const plant = (await createPlant(ctx)).body;
     const tag = (await api().post(`/api/nurseries/${ctx.nurseryId}/tags`).set('Cookie', ctx.cookie).send({ name: 'T2', color: '#0000FF' })).body;
     const add = await api().post(`${plantsBase(ctx)}/${plant.id}/tags/${tag.id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(add.status);
+    expect(add.status).toBe(204);
     const withTags = await api().get(`${plantsBase(ctx)}/${plant.id}`).set('Cookie', ctx.cookie);
     expect(withTags.body.tags.some((t) => t.id === tag.id)).toBe(true);
     const remove = await api().delete(`${plantsBase(ctx)}/${plant.id}/tags/${tag.id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(remove.status);
+    expect(remove.status).toBe(204);
   });
 
   it('фильтрация по контейнеру и numeric code', async () => {

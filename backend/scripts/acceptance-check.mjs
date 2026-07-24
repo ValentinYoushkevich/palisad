@@ -572,6 +572,107 @@ async function main() {
     feature_operations: true, feature_qr: true, feature_photos: false,
   });
 
+  // ============ MODULE 14 — v2: In-app уведомления ============
+  // Единственный продюсер уведомлений — staff.service.changeRole → notify(ROLE_CHANGED)
+  // для целевого юзера. Роль агронома меняли в M5#6 (worker → agronomist), поэтому у
+  // agro уже есть уведомления user.role_changed. Ответ GET: { data, total, unreadCount, ... }.
+  r = await req(jarAgro, 'GET', `${P}/notifications`);
+  const agroNotifs = r.data?.data ?? r.data;
+  const roleNotif = Array.isArray(agroNotifs)
+    ? agroNotifs.find((n) => n.type === 'user.role_changed')
+    : null;
+  check(14, 1, 'Список уведомлений юзера (GET) отдаёт только свои',
+    r.status === 200 && !!roleNotif && agroNotifs.every((n) => n.user_id === agro.id),
+    `count=${agroNotifs?.length}, unread=${r.data?.unreadCount}`);
+
+  r = await req(jarA, 'GET', `${P}/notifications`);
+  const ownerNotifs = r.data?.data ?? r.data;
+  const leakedNotif = Array.isArray(ownerNotifs) && ownerNotifs.some((n) => n.id === roleNotif?.id);
+  check(14, 2, 'Изоляция: юзер не видит чужие уведомления',
+    r.status === 200 && !leakedNotif, `leaked=${leakedNotif}`);
+
+  r = await req(jarAgro, 'PATCH', `${P}/notifications/${roleNotif?.id}/read`);
+  const notifRead = roleNotif && (await db('notifications').where({ id: roleNotif.id }).first());
+  check(14, 3, 'Пометка уведомления прочитанным (204)',
+    r.status === 204 && notifRead?.is_read === true, `status=${r.status}, is_read=${notifRead?.is_read}`);
+
+  r = await req(jarA, 'PATCH', `${P}/notifications/${roleNotif?.id}/read`);
+  check(14, 4, 'Изоляция записи: пометка чужого уведомления → 404', r.status === 404, `status=${r.status}`);
+
+  // ============ MODULE 15 — v2: Производственные стадии ============
+  // Системные стадии (nursery_id IS NULL) видны всем питомникам; смена стадии — только
+  // через операцию change_stage (operation.service.applyOperationSideEffects).
+  r = await req(jarA, 'GET', `${P}/production-stages`);
+  const stages = Array.isArray(r.data) ? r.data : (r.data?.data ?? r.data);
+  const systemSlugs = ['propagation', 'liner', 'container', 'field'];
+  const sysStages = Array.isArray(stages) ? stages.filter((s) => s.is_system) : [];
+  const hasAllSystem = systemSlugs.every((slug) =>
+    sysStages.some((s) => s.slug === slug && s.nursery_id === null));
+  check(15, 1, 'Список системных стадий (4 шт., nursery_id=null)',
+    r.status === 200 && hasAllSystem, `system=${sysStages.length}`);
+  const containerStage = Array.isArray(stages) ? stages.find((s) => s.slug === 'container') : null;
+
+  r = await req(jarA, 'POST', OP, { type: 'change_stage', newStageId: containerStage?.id, notes: 'to container' });
+  const plantStageDb = await db('plants').where({ id: plant1.id }).first();
+  const stageHist = await db('plant_stage_history')
+    .where({ plant_id: plant1.id, stage_id: containerStage?.id }).first();
+  check(15, 2, 'change_stage меняет plants.stage_id и пишет plant_stage_history',
+    r.status === 201 && plantStageDb.stage_id === containerStage?.id && !!stageHist,
+    `status=${r.status}, stage=${plantStageDb.stage_id === containerStage?.id}, hist=${!!stageHist}`);
+
+  r = await req(jarA, 'POST', OP, { type: 'change_stage' });
+  check(15, 3, 'change_stage без newStageId → 400', r.status === 400, `status=${r.status}`);
+
+  const normRes = await req(jarA, 'POST', `${P}/stage-labor-norms`,
+    { stage_id: containerStage?.id, operation_type: 'pruning', norm_minutes: 30 });
+  r = await req(jarA, 'GET', `${P}/stage-labor-norms?stageId=${containerStage?.id}`);
+  const norms = Array.isArray(r.data) ? r.data : (r.data?.data ?? r.data);
+  const hasNorm = Array.isArray(norms) &&
+    norms.some((n) => n.stage_id === containerStage?.id && n.operation_type === 'pruning');
+  check(15, 4, 'Норма труда на стадию: создание (201) и фильтр по stageId',
+    normRes.status === 201 && r.status === 200 && hasNorm,
+    `create=${normRes.status}, list=${r.status}, found=${hasNorm}`);
+
+  // ============ MODULE 16 — v2: Мульти-питомник (переключение + изоляция) ============
+  // Второй питомник на аккаунте требует nursery_limit >= 2. createNursery сразу
+  // активирует новый питомник (authService.activateNursery: cookie + last_active_nursery_id).
+  await setPlan({ nursery_limit: 5 });
+  r = await req(jarA, 'POST', '/nurseries', { name: 'Accept Nursery B', address: 'B street 2' });
+  const nurseryBSame = await db('nurseries').where({ account_id: accA.id }).whereNot({ id: nid }).first();
+  const accAfterCreate = await db('accounts').where({ id: accA.id }).first();
+  check(16, 1, 'Создание второго питомника на аккаунте → он становится активным',
+    r.status === 201 && !!nurseryBSame && accAfterCreate.last_active_nursery_id === nurseryBSame.id,
+    `status=${r.status}, active=${accAfterCreate.last_active_nursery_id === nurseryBSame?.id}`);
+  const nidB = nurseryBSame?.id;
+
+  // jarA теперь в контексте B — растения питомника A там не видны
+  r = await req(jarA, 'GET', `/nurseries/${nidB}/plants?perPage=100`);
+  const bItems = r.data?.items ?? r.data?.data ?? r.data;
+  const bHasAPlant = Array.isArray(bItems) && bItems.some((p) => p.id === plant1.id);
+  check(16, 2, 'Изоляция: ресурсы питомника A не видны в контексте B',
+    r.status === 200 && !bHasAPlant, `count=${bItems?.length}, leaked=${bHasAPlant}`);
+
+  // Активная сессия B не имеет доступа к URL питомника A (requireNurseryAccess) → 403
+  r = await req(jarA, 'GET', `${P}/plants`);
+  check(16, 3, 'Сессия активного питомника B не видит A по URL → 403', r.status === 403, `status=${r.status}`);
+
+  // Переключение активного питомника обратно на A
+  r = await req(jarA, 'POST', `/nurseries/${nid}/switch`);
+  const accAfterSwitch = await db('accounts').where({ id: accA.id }).first();
+  check(16, 4, 'Переключение активного питомника обновляет last_active_nursery_id',
+    r.status === 200 && r.data?.nursery?.id === nid && accAfterSwitch.last_active_nursery_id === nid,
+    `status=${r.status}, active=${accAfterSwitch.last_active_nursery_id === nid}`);
+
+  // После switch ресурсы отдаются из нового активного питомника (A) — plant1 снова виден
+  r = await req(jarA, 'GET', `${P}/plants?perPage=100`);
+  const aItems = r.data?.items ?? r.data?.data ?? r.data;
+  const aHasPlant = Array.isArray(aItems) && aItems.some((p) => p.id === plant1.id);
+  check(16, 5, 'После switch ресурсы отдаются из активного питомника',
+    r.status === 200 && aHasPlant, `count=${aItems?.length}, found=${aHasPlant}`);
+
+  // Возврат free-плана к дефолтному nursery_limit
+  await setPlan({ nursery_limit: 1 });
+
   // ---------- Итог ----------
   const failed = results.filter((x) => !x.pass);
   console.log(`\n========== ИТОГО: ${results.length - failed.length}/${results.length} PASS ==========`);

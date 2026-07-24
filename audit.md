@@ -40,7 +40,20 @@
   16/16**, оба линта без ошибок. Мёртвые `workbox-*` зависимости удалены. Вне пакета осталась
   F6 (полная очистка Dexie/SW-кэша при logout) — закрыт лишь новый кэш контекста питомника.
   Коммит — за пользователем.
-- Пункты 4–6 — не начаты.
+- **✅ Пункт 4 «Инфраструктура качества» — выполнено 2026-07-24.** Закрыты T2 (CI: GitHub
+  Actions `.github/workflows/ci.yml` — джобы `backend` [PG-сервис, `lint` + `vitest --coverage`
+  с порогами 90/80], `frontend` [`test` + `build`; `lint` неблокирующий — предсуществующие
+  ошибки в locations-страницах вне scope], `acceptance` [boot backend + прогон приёмки, гейт
+  по exit-коду]), T3 (`acceptance-check.mjs` знает о v2: **+13 проверок** — M14 уведомления,
+  M15 производственные стадии, M16 мультипитомник; `process.exit(1)` при любом FAIL для CI),
+  T7 (**28 толерантных ассертов** ужесточены до точного статуса в 10 тест-файлах; худший
+  `productionStages` — до строго `409`), D3 (`documentation/schema.sql` реконструирован из
+  миграций: **+4 v2-таблицы** `production_stages`/`plant_stage_history`/`stage_labor_norms`/
+  `notifications`, колонки `plants.stage_id` и `accounts.last_active_nursery_id`, значение
+  `change_stage` в CHECK, составные FK изоляции, сид-коды приведены к фактическим
+  `TRENCH`/`COLD_STORAGE`/`GREENHOUSE`; версия шапки → v2). Прогон **backend 182/182** зелёный
+  после ужесточения; backend-линт 0 ошибок. Коммит — за пользователем.
+- Пункты 5–6 — не начаты.
 
 ---
 
@@ -468,7 +481,12 @@ RBAC-механика в рантайме пока декоративна (B11).
 
 ### Важно
 
-- **D3. schema.sql устарел — весь v2 в нём отсутствует.**
+- **D3. schema.sql устарел — весь v2 в нём отсутствует.** ✅ **Исправлено 2026-07-24** —
+  `documentation/schema.sql` реконструирован из миграций (без живой БД): добавлены таблицы
+  `production_stages`, `plant_stage_history`, `stage_labor_norms`, `notifications`; колонки
+  `plants.stage_id`, `accounts.last_active_nursery_id`, `operations/movements.client_request_id`;
+  значение `change_stage` в CHECK `operations.type`; составные FK изоляции для `plants`; шапка → v2.
+  Закомментированный сид контейнеров приведён к фактическому (`TRENCH`/`COLD_STORAGE`/`GREENHOUSE`).
   `backend/documentation/schema.sql:3` (версия «MVP v0.8») — нет таблиц `notifications`,
   `production_stages`, `plant_stage_history`, `stage_labor_norms`, колонок `plants.stage_id`,
   `accounts.last_active_nursery_id`, значения `change_stage` в CHECK операций.
@@ -562,13 +580,22 @@ RBAC-механика в рантайме пока декоративна (B11).
   данных), `stores/auth.store.js`, `stores/plants.store.js`, `db/indexedDb.js` (схема/версии).
   *Исправление:* vitest + @vue/test-utils + fake-indexeddb, начать с чистых юнитов очереди и гарда.
 
-- **T2. Отсутствие CI.**
+- **T2. Отсутствие CI.** ✅ **Исправлено 2026-07-24** — `.github/workflows/ci.yml`: джоб
+  `backend` (PG-сервис `postgres:16`, `lint` + `vitest run --coverage` с порогами 90/80 из
+  конфига), джоб `frontend` (`test` + `build`; `lint` неблокирующий — техдолг locations),
+  джоб `acceptance` (boot backend :3100 + прогон `acceptance-check.mjs`, гейт по exit-коду).
+  Триггеры `push`/`pull_request`.
   Каталога `.github/` (и любого CI-конфига) нет. Пороги покрытия в `backend/vitest.config.js`
   (90/80) нигде автоматически не проверяются; `npm test` гоняет тесты без coverage.
   *Исправление:* GitHub Actions с сервис-контейнером Postgres: lint + `vitest run --coverage`
   для backend, build + lint для frontend.
 
-- **T3. acceptance-check.mjs не знает о v2.**
+- **T3. acceptance-check.mjs не знает о v2.** ✅ **Исправлено 2026-07-24** — добавлено 13
+  проверок v2: M14 (in-app уведомления: список, изоляция чтения/записи, mark-read), M15
+  (производственные стадии: системные стадии, `change_stage` пишет `plants.stage_id` +
+  `plant_stage_history`, нормы труда), M16 (мультипитомник: создание 2-го питомника, изоляция
+  ресурсов A↔B, `requireNurseryAccess` 403, `switch` + `last_active_nursery_id`). Скрипт даёт
+  `exit 1` при любом FAIL — теперь гейтится в CI-джобе `acceptance`.
   `backend/scripts/acceptance-check.mjs` — 81 `check()` строго по модулям M2–M13; ни одного
   упоминания notifications, production stages, switch, мульти-питомников. В CI не включён.
   «Приёмка» зелёная при сломанной v2-функциональности.
@@ -601,7 +628,13 @@ RBAC-механика в рантайме пока декоративна (B11).
   Нет тестов повторной доставки
   (идемпотентность replay POST из очереди — см. F2) и конфликта устаревшего PATCH. Для
   offline-first продукта это ядро корректности.
-- **T7. Слабые/толерантные assertions.** 27 мест вида `expect([200, 204]).toContain(...)`
+- **T7. Слабые/толерантные assertions.** ✅ **Исправлено 2026-07-24** — 28 толерантных
+  ассертов статуса в 10 тест-файлах заменены на точный `expect(res.status).toBe(<N>)` (каждый
+  сверен с контроллером и прогоном). `productionStages` дубль → строго `409` (fallback
+  `23505`→409 в `errorHandler` подтверждён, правка кода не потребовалась). `offlineSync`:
+  первый POST и идемпотентный replay → строго `201` при сохранении смысла идемпотентности.
+  Прогон **182/182** зелёный. Оставлены легитимные `toBeGreaterThanOrEqual(N)` на размер
+  выборки (не статус). Было: 27 мест вида `expect([200, 204]).toContain(...)`
   (dictionary.test.js, plants.test.js, operations.test.js и др.). Худшее —
   productionStages.test.js: `expect(dup.status).toBeGreaterThanOrEqual(400)` принимает и 500,
   маскируя немаппированную unique-ошибку (должен быть 409 через маппинг 23505).
@@ -646,8 +679,11 @@ RBAC-механика в рантайме пока декоративна (B11).
    идемпотентности (F2/T6). Итог: backend 182/182, frontend 16/16, оба линта без ошибок,
    миграция `20260724130000` обратима. Вне пакета: F6 (полная очистка кэша при logout),
    конфликт устаревшего PATCH (T6) — отдельными задачами.
-4. **Инфраструктура качества:** T2 (CI), T3 (acceptance для v2), T7 (ужесточить assertions),
-   D3 (schema.sql).
+4. ✅ **ВЫПОЛНЕНО 2026-07-24. Инфраструктура качества:** T2 (CI — GitHub Actions,
+   backend/frontend/acceptance джобы), T3 (acceptance-check знает о v2, +13 проверок), T7 (28
+   ассертов ужесточены), D3 (schema.sql реконструирован из миграций). Итог: backend **182/182**
+   зелёные, backend-линт 0 ошибок, CI-конфиг + приёмка v2. 4 домена сделаны параллельными
+   агентами, пересечений файлов нет. Коммит — за пользователем.
 5. **Продуктовые решения:** B11 (staff-логин — доделать или зафиксировать), B12/B13
    (биллинг/истечение подписок), F13 (фича фото — доделать или вырезать).
 6. Остальное («Важно» и «Незначительно») — фоном, по мере касания соответствующих файлов.

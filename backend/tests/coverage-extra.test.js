@@ -39,7 +39,7 @@ describe('Покрытие — дополнительные пути', () => {
     const photo = (await api().post(`${opBase}/${op.id}/photos`).set('Cookie', ctx.cookie).send({ url: 'https://example.com/p.jpg' })).body;
 
     const del = await api().delete(`${opBase}/${op.id}/photos/${photo.id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(del.status);
+    expect(del.status).toBe(204);
 
     const missing = await api()
       .delete(`${opBase}/${op.id}/photos/00000000-0000-4000-8000-000000000000`)

@@ -45,7 +45,7 @@ describe('M6 — Подписки', () => {
       .post('/api/subscriptions/change')
       .set('Cookie', ctx.cookie)
       .send({ planId: paid.id });
-    expect([200, 201]).toContain(res.status);
+    expect(res.status).toBe(200);
     const previous = await db('subscriptions').where({ id: oldSub.id }).first();
     expect(previous.status).toBe('cancelled');
   });

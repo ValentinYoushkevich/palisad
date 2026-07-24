@@ -44,7 +44,7 @@ describe('M8 — Справочники', () => {
       .post(`${base}/species/attach-by-name`)
       .set('Cookie', ctx.cookie)
       .send({ scientific_name: 'Acer platanoides', display_name_ru: 'Клён остролистный' });
-    expect([200, 201]).toContain(attach.status);
+    expect(attach.status).toBe(201);
     const created = await db('nursery_species').where({ nursery_id: ctx.nurseryId });
     expect(created).toHaveLength(1);
   });
@@ -80,7 +80,7 @@ describe('M8 — Справочники', () => {
     const ctx = await createOwnerWithNursery();
     const base = `/api/nurseries/${ctx.nurseryId}/tags`;
     const create = await api().post(base).set('Cookie', ctx.cookie).send({ name: 'Tag A', color: '#00FF00' });
-    expect([200, 201]).toContain(create.status);
+    expect(create.status).toBe(201);
     const tagId = create.body.id;
     expect(tagId).toBeTruthy();
 
@@ -88,7 +88,7 @@ describe('M8 — Справочники', () => {
     expect(update.status).toBe(200);
 
     const del = await api().delete(`${base}/${tagId}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(del.status);
+    expect(del.status).toBe(200);
     const row = await db('tags').where({ id: tagId }).first();
     expect(row.is_active).toBe(false);
 
@@ -102,8 +102,8 @@ describe('M8 — Справочники', () => {
     const sys = await systemMovementType('sale');
     const patch = await api().patch(`${base}/${sys.id}`).set('Cookie', ctx.cookie).send({ name: 'Hack' });
     const del = await api().delete(`${base}/${sys.id}`).set('Cookie', ctx.cookie);
-    expect([400, 403]).toContain(patch.status);
-    expect([400, 403]).toContain(del.status);
+    expect(patch.status).toBe(403);
+    expect(del.status).toBe(403);
   });
 
   it('CRUD пользовательских movement_types', async () => {
@@ -113,12 +113,12 @@ describe('M8 — Справочники', () => {
       .post(base)
       .set('Cookie', ctx.cookie)
       .send({ name: 'Custom Move', slug: `cm-${Date.now()}`, sets_status: 'growing' });
-    expect([200, 201]).toContain(create.status);
+    expect(create.status).toBe(201);
     const id = create.body.id;
     const patch = await api().patch(`${base}/${id}`).set('Cookie', ctx.cookie).send({ name: 'Renamed' });
     expect(patch.status).toBe(200);
     const del = await api().delete(`${base}/${id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(del.status);
+    expect(del.status).toBe(200);
 
     const list = await api().get(base).set('Cookie', ctx.cookie);
     expect(list.status).toBe(200);
@@ -130,8 +130,8 @@ describe('M8 — Справочники', () => {
     const sys = await systemContainerType('P9');
     const patch = await api().patch(`${base}/${sys.id}`).set('Cookie', ctx.cookie).send({ name: 'Hack' });
     const del = await api().delete(`${base}/${sys.id}`).set('Cookie', ctx.cookie);
-    expect([400, 403]).toContain(patch.status);
-    expect([400, 403]).toContain(del.status);
+    expect(patch.status).toBe(403);
+    expect(del.status).toBe(403);
   });
 
   it('удаление используемого container type — мягкое (is_active=false)', async () => {
@@ -141,7 +141,7 @@ describe('M8 — Справочники', () => {
       .post(ctBase)
       .set('Cookie', ctx.cookie)
       .send({ code: `CUST-${Date.now()}`, name: 'Custom Pot', container_kind: 'pot', volume_liters: 7 });
-    expect([200, 201]).toContain(create.status);
+    expect(create.status).toBe(201);
     const custom = create.body;
 
     await api()
@@ -150,7 +150,7 @@ describe('M8 — Справочники', () => {
       .send({ containerId: custom.id, variety: 'CT user' });
 
     const del = await api().delete(`${ctBase}/${custom.id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(del.status);
+    expect(del.status).toBe(200);
     const row = await db('container_types').where({ id: custom.id }).first();
     expect(row.is_active).toBe(false);
 

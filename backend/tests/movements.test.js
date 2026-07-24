@@ -72,6 +72,6 @@ describe('M11 — Движения', () => {
   it('owner может удалить движение → 200/204', async () => {
     const mv = (await api().post(mvBase).set('Cookie', ctx.cookie).send({ typeId: transfer.id, toLocationId: place.id })).body;
     const res = await api().delete(`${mvBase}/${mv.id}`).set('Cookie', ctx.cookie);
-    expect([200, 204]).toContain(res.status);
+    expect(res.status).toBe(204);
   });
 });
