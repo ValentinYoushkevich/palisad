@@ -32,6 +32,9 @@ export const useMovementTypesStore = defineStore('movementTypes', {
         return { ok: true }
       } catch (error) {
         this.movementTypesError = error?.response?.data?.error || 'Не удалось загрузить типы движений.'
+        // F11: офлайн/сетевой сбой — поднимаем типы движений из кэша Dexie, чтобы история
+        // движений и фильтры работали без сети.
+        await this.loadFromLocal()
         return { ok: false, error: this.movementTypesError }
       } finally {
         this.isLoading = false

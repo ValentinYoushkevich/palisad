@@ -67,6 +67,27 @@ describe('Этап 2 — Уведомления', () => {
     });
   });
 
+  // B21 — пагинация валидируется и зажимается: perPage капается ≤100, мусор → дефолт.
+  describe('B21 — валидация пагинации', () => {
+    it('perPage=1000000 зажимается до 100 (не выгружает всё)', async () => {
+      await notify({ nurseryId: ctx.nurseryId, userId: ctx.owner.id, type: NOTIFICATION_TYPES.TASK_DUE });
+      await notify({ nurseryId: ctx.nurseryId, userId: ctx.owner.id, type: NOTIFICATION_TYPES.TASK_DUE });
+
+      const res = await api().get(`${base}?perPage=1000000`).set('Cookie', ctx.cookie);
+      expect(res.status).toBe(200);
+      expect(res.body.perPage).toBe(100);
+      expect(res.body.data.length).toBeLessThanOrEqual(100);
+    });
+
+    it('page=abc не роняет 500 (дефолт page=1)', async () => {
+      await notify({ nurseryId: ctx.nurseryId, userId: ctx.owner.id, type: NOTIFICATION_TYPES.TASK_DUE });
+
+      const res = await api().get(`${base}?page=abc`).set('Cookie', ctx.cookie);
+      expect(res.status).toBe(200);
+      expect(res.body.page).toBe(1);
+    });
+  });
+
   describe('PATCH /notifications/:id/read', () => {
     it('помечает уведомление прочитанным', async () => {
       const n = await notify({ nurseryId: ctx.nurseryId, userId: ctx.owner.id, type: NOTIFICATION_TYPES.TASK_DUE });

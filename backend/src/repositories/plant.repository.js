@@ -104,12 +104,20 @@ export function findByNurseryAndIds(nurseryId, ids) {
     .whereNull('deleted_at');
 }
 
-export function findByQrCode(qrCode) {
-  return db('plants').where({ qr_code: qrCode }).whereNull('deleted_at').first();
+// Поиск по коду — строго в пределах питомника: это и изоляция чтения (сканер не видит
+// чужие растения), и опора на per-nursery уникальность кодов вместо глобальной (D8).
+export function findByQrCode(nurseryId, qrCode) {
+  return db('plants')
+    .where({ nursery_id: nurseryId, qr_code: qrCode })
+    .whereNull('deleted_at')
+    .first();
 }
 
-export function findByNumericCode(numericCode) {
-  return db('plants').where({ numeric_code: numericCode }).whereNull('deleted_at').first();
+export function findByNumericCode(nurseryId, numericCode) {
+  return db('plants')
+    .where({ nursery_id: nurseryId, numeric_code: numericCode })
+    .whereNull('deleted_at')
+    .first();
 }
 
 export function create(data, executor = db) {

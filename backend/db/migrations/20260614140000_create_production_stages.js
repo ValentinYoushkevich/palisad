@@ -1,10 +1,3 @@
-const SYSTEM_STAGES = [
-  { name: 'Размножение', slug: 'propagation', sort_order: 1 },
-  { name: 'Подвой (Liner)', slug: 'liner', sort_order: 2 },
-  { name: 'Контейнер', slug: 'container', sort_order: 3 },
-  { name: 'Поле', slug: 'field', sort_order: 4 },
-];
-
 /**
  * @param {import('knex').Knex} knex
  */
@@ -51,9 +44,12 @@ export async function up(knex) {
   await knex.schema.raw('CREATE INDEX idx_plant_stage_history_plant ON plant_stage_history(plant_id)');
   await knex.schema.raw('CREATE INDEX idx_stage_labor_norms_nursery ON stage_labor_norms(nursery_id)');
 
-  await knex('production_stages').insert(
-    SYSTEM_STAGES.map((stage) => ({ ...stage, is_system: true, is_active: true }))
-  );
+  // Системные строки (nursery_id = NULL) здесь НЕ вставляем (аудит D4): единый
+  // канонический провижинер системных справочников — идемпотентный сид
+  // db/seeds/001_mvp_seed.js (movement_types + container_types + production_stages).
+  // Прогонять сид после миграций. Удаление data-insert безопасно: миграция уже
+  // применена на существующих БД (строки там есть, сид их идемпотентно не тронет),
+  // а свежая «только миграции» БД получает системные стадии из сида.
 }
 
 /**

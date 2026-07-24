@@ -7,6 +7,7 @@ import morgan from 'morgan';
 
 import * as subscriptionController from '@/controllers/subscription.controller.js';
 import errorHandler from '@/middlewares/errorHandler.js';
+import { generalLimiter } from '@/middlewares/rateLimit.js';
 import { requireAuth } from '@/middlewares/requireAuth.js';
 import activityLogRouter from '@/routes/activityLog.router.js';
 import authRouter from '@/routes/auth.router.js';
@@ -36,6 +37,9 @@ if (process.env.NODE_ENV !== 'test') {
 }
 app.use(express.json());
 app.use(cookieParser());
+
+// Общий rate limiting на весь /api (B14). Строгий authLimiter — в auth.router.js.
+app.use('/api', generalLimiter);
 
 app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);

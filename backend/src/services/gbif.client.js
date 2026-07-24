@@ -2,9 +2,23 @@ import { AppError } from '@/utils/AppError.js';
 
 const GBIF_BASE_URL = 'https://api.gbif.org/v1';
 const MIN_CONFIDENCE = 90;
+const GBIF_TIMEOUT_MS = 5000;
+
+// fetch к внешнему GBIF раньше шёл без таймаута и мог висеть неопределённо долго,
+// удерживая соединение/воркер. Ограничиваем AbortController'ом; при таймауте fetch
+// бросает AbortError — вызывающий сам решает, деградировать или пробросить (B19).
+async function gbifFetch(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GBIF_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function matchSpeciesByName(name) {
-  const response = await fetch(
+  const response = await gbifFetch(
     `${GBIF_BASE_URL}/species/match?${new URLSearchParams({ name }).toString()}`
   );
   if (!response.ok) {
@@ -21,7 +35,7 @@ export async function searchSpecies(query, limit = 10) {
     status: 'ACCEPTED',
     limit: String(limit),
   });
-  const response = await fetch(`${GBIF_BASE_URL}/species/search?${params.toString()}`);
+  const response = await gbifFetch(`${GBIF_BASE_URL}/species/search?${params.toString()}`);
   if (!response.ok) {
     throw new AppError('Не удалось выполнить запрос к GBIF search API', 502, 'GBIF_SEARCH_FAILED');
   }

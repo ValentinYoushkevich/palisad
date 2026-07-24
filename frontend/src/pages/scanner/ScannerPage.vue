@@ -57,14 +57,21 @@ const notFound = ref(false)
 
 async function handleScanned(qrCode) {
   notFound.value = false
-  const plant = await plantsStore.findByQr(qrCode)
 
-  if (plant?.id) {
-    router.push(`/plants/${plant.id}`)
-    return
+  // F12: защищаемся от исключения (даже если стор перестанет глотать ошибку) — иначе
+  // необработанный reject из обработчика события камеры.
+  try {
+    const plant = await plantsStore.findByQr(qrCode)
+
+    if (plant?.id) {
+      router.push(`/plants/${plant.id}`)
+      return
+    }
+
+    notFound.value = true
+  } catch {
+    notFound.value = true
   }
-
-  notFound.value = true
 }
 
 function handleCameraError() {
@@ -87,14 +94,20 @@ async function handleManualSearch() {
   isSearching.value = true
   notFound.value = false
 
-  const plant = await plantsStore.findByNumericCode(manualCode.value.trim())
-  if (plant?.id) {
-    router.push(`/plants/${plant.id}`)
-  } else {
+  // F12: гарантируем сброс isSearching в finally — иначе при исключении кнопка «Найти»
+  // навсегда остаётся в состоянии loading.
+  try {
+    const plant = await plantsStore.findByNumericCode(manualCode.value.trim())
+    if (plant?.id) {
+      router.push(`/plants/${plant.id}`)
+    } else {
+      notFound.value = true
+    }
+  } catch {
     notFound.value = true
+  } finally {
+    isSearching.value = false
   }
-
-  isSearching.value = false
 }
 </script>
 

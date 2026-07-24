@@ -1,10 +1,12 @@
 import * as notificationRepo from '@/repositories/notification.repository.js';
 import { AppError } from '@/utils/AppError.js';
+import { parsePagination } from '@/utils/validators/pagination.validators.js';
 
 export async function getNotifications(nurseryId, userId, query) {
-  const { page = 1, perPage = 20, unread } = query;
+  const { unread } = query;
   const filters = { unread: unread === 'true' || unread === true };
-  const pagination = { page: Number(page), perPage: Number(perPage) };
+  // Валидируем/зажимаем пагинацию: perPage ограничен 100, кривые значения → дефолты (B21).
+  const pagination = parsePagination(query);
 
   const [data, total, unreadCount] = await Promise.all([
     notificationRepo.findByUser(nurseryId, userId, filters, pagination),

@@ -82,4 +82,27 @@ describe('M10 — Операции и фото', () => {
     const res = await api().post(opBase).set('Cookie', ctx.observer.cookie).send({ type: 'inspection' });
     expect(res.status).toBe(403);
   });
+
+  // B16 — PATCH операции: notes меняется, side-effect-поля отклоняются 400 (не 500).
+  it('PATCH notes своей операции → 200 (без 500)', async () => {
+    const op = (await api().post(opBase).set('Cookie', ctx.cookie).send({ type: 'inspection', notes: 'before' })).body;
+    const res = await api().patch(`${opBase}/${op.id}`).set('Cookie', ctx.cookie).send({ notes: 'after' });
+    expect(res.status).toBe(200);
+    expect(res.body.notes).toBe('after');
+    const row = await db('operations').where({ id: op.id }).first();
+    expect(row.notes).toBe('after');
+  });
+
+  it('PATCH с newStageId → 400 (а не 500)', async () => {
+    const op = (await api().post(opBase).set('Cookie', ctx.cookie).send({ type: 'inspection' })).body;
+    const stageId = '11111111-1111-1111-1111-111111111111';
+    const res = await api().patch(`${opBase}/${op.id}`).set('Cookie', ctx.cookie).send({ newStageId: stageId });
+    expect(res.status).toBe(400);
+  });
+
+  it('PATCH со сменой type → 400 (а не 500)', async () => {
+    const op = (await api().post(opBase).set('Cookie', ctx.cookie).send({ type: 'inspection' })).body;
+    const res = await api().patch(`${opBase}/${op.id}`).set('Cookie', ctx.cookie).send({ type: 'pruning' });
+    expect(res.status).toBe(400);
+  });
 });

@@ -37,8 +37,8 @@ export async function getPlantById(nurseryId, id) {
 }
 
 export async function findByQr(nurseryId, qrCode) {
-  const plant = await plantRepo.findByQrCode(qrCode);
-  if (!plant || plant.nursery_id !== nurseryId) {
+  const plant = await plantRepo.findByQrCode(nurseryId, qrCode);
+  if (!plant) {
     throw new AppError('Растение не найдено', 404);
   }
 
@@ -46,8 +46,8 @@ export async function findByQr(nurseryId, qrCode) {
 }
 
 export async function findByNumericCode(nurseryId, numericCode) {
-  const plant = await plantRepo.findByNumericCode(numericCode);
-  if (!plant || plant.nursery_id !== nurseryId) {
+  const plant = await plantRepo.findByNumericCode(nurseryId, numericCode);
+  if (!plant) {
     throw new AppError('Растение не найдено', 404);
   }
 
@@ -58,7 +58,7 @@ export async function createPlant(nurseryId, accountId, data, userId) {
   await resolveReferences(nurseryId, data);
 
   const qrCode = generateQrCode();
-  const numericCode = await generateUniqueNumericCode();
+  const numericCode = await generateUniqueNumericCode(nurseryId);
   // Лимит проверяется под advisory-lock'ом внутри той же транзакции, что и вставка,
   // иначе параллельные создания пробивают plant_limit (TOCTOU, см. B10).
   const plant = await db.transaction(async (trx) => {
@@ -109,7 +109,7 @@ export async function bulkCreate(nurseryId, accountId, template, count) {
       source: template.source ?? null,
       notes: template.notes ?? null,
       qr_code: generateQrCode(),
-      numeric_code: await generateUniqueNumericCode(),
+      numeric_code: await generateUniqueNumericCode(nurseryId),
     });
   }
 
@@ -260,10 +260,12 @@ async function resolveReferences(nurseryId, data) {
   }
 }
 
-async function generateUniqueNumericCode() {
+// Проверка коллизии — в пределах питомника: коды уникальны per-nursery (D8), поэтому
+// пространство генерации сузилось до одного питомника и коллизии практически исчезли.
+async function generateUniqueNumericCode(nurseryId) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const code = String(Date.now() + Math.floor(Math.random() * 10000)).slice(-8);
-    const existing = await plantRepo.findByNumericCode(code);
+    const existing = await plantRepo.findByNumericCode(nurseryId, code);
     if (!existing) {
       return code;
     }

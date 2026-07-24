@@ -19,11 +19,25 @@ export async function searchSpecies(nurseryId, q) {
     return [];
   }
 
-  const [localSpecies, catalogMatches, gbifMatches] = await Promise.all([
+  // GBIF — внешний источник: его недоступность/таймаут не должны ронять весь поиск.
+  // allSettled даёт деградировать до локальных результатов вместо 502 (B19). Локальные
+  // источники (наша БД) при сбое — реальная ошибка, её пробрасываем.
+  const [localResult, catalogResult, gbifResult] = await Promise.allSettled([
     nurserySpeciesRepo.searchByQuery(nurseryId, query),
     speciesCatalogRepo.searchByQuery(query, 20),
     gbifClient.searchSpecies(query, 10),
   ]);
+
+  if (localResult.status === 'rejected') {
+    throw localResult.reason;
+  }
+  if (catalogResult.status === 'rejected') {
+    throw catalogResult.reason;
+  }
+
+  const localSpecies = localResult.value;
+  const catalogMatches = catalogResult.value;
+  const gbifMatches = gbifResult.status === 'fulfilled' ? gbifResult.value : [];
 
   const suggestions = [];
   const seen = new Set();

@@ -35,6 +35,9 @@ export const useLocationsStore = defineStore('locations', {
         return { ok: true }
       } catch (error) {
         this.locationsError = error?.response?.data?.error || 'Не удалось загрузить локации.'
+        // F11: офлайн/сетевой сбой — поднимаем локации из кэша Dexie, чтобы названия и
+        // фильтры по локациям работали без сети.
+        await this.loadFromLocal()
         return { ok: false, error: this.locationsError }
       } finally {
         this.isLoading = false

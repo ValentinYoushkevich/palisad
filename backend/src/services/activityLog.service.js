@@ -1,9 +1,11 @@
 import * as activityRepo from '@/repositories/activityLog.repository.js';
+import { parsePagination } from '@/utils/validators/pagination.validators.js';
 
 export async function getLogs(nurseryId, query) {
-  const { page = 1, perPage = 30, userId, eventType, dateFrom, dateTo } = query;
+  const { userId, eventType, dateFrom, dateTo } = query;
   const filters = { userId, eventType, dateFrom, dateTo };
-  const pagination = { page: Number(page), perPage: Number(perPage) };
+  // Валидируем/зажимаем пагинацию: perPage ограничен 100, кривые значения → дефолты (B21).
+  const pagination = parsePagination(query);
 
   const [logs, total] = await Promise.all([
     activityRepo.findByNursery(nurseryId, filters, pagination),

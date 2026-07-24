@@ -291,8 +291,8 @@ CREATE TABLE plants (
   location_id         UUID,       -- v2: FK составной (location_id, nursery_id) — см. ниже
   container_id        UUID        REFERENCES container_types(id) ON DELETE SET NULL,
   stage_id            UUID        REFERENCES production_stages(id) ON DELETE SET NULL,  -- v2 (миграция 20260614140000)
-  qr_code             TEXT        NOT NULL UNIQUE,
-  numeric_code        TEXT        NOT NULL UNIQUE,
+  qr_code             TEXT        NOT NULL,   -- v2 (D8): уникален в паре (nursery_id, qr_code) — см. индексы ниже
+  numeric_code        TEXT        NOT NULL,   -- v2 (D8): уникален в паре (nursery_id, numeric_code) — см. индексы ниже
   variety             TEXT,
   status              TEXT        NOT NULL DEFAULT 'growing'
                                   CONSTRAINT chk_plants_status
@@ -443,10 +443,13 @@ CREATE TABLE notifications (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   nursery_id  UUID        NOT NULL REFERENCES nurseries(id) ON DELETE CASCADE,
   user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  type        TEXT        NOT NULL,
+  type        TEXT        NOT NULL
+                          CONSTRAINT chk_notifications_type  -- v2 (D7, миграция 20260724172000)
+                          CHECK (type IN ('user.role_changed', 'sync.conflict', 'subscription.expiring', 'task.due')),
   payload     JSONB,
   is_read     BOOLEAN     NOT NULL DEFAULT false,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()  -- v2 (D7, миграция 20260724172000)
 );
 
 -- ------------------------------------------------------------
@@ -509,6 +512,22 @@ CREATE INDEX idx_notifications_created_at ON notifications(created_at);
 -- v2: идемпотентность офлайн-очереди — частичные UNIQUE-индексы (миграция 20260724130000)
 CREATE UNIQUE INDEX idx_operations_client_request_id ON operations(client_request_id) WHERE client_request_id IS NOT NULL;
 CREATE UNIQUE INDEX idx_movements_client_request_id  ON movements(client_request_id)  WHERE client_request_id IS NOT NULL;
+
+-- v2: горячие композитные индексы (D6, миграция 20260724171000)
+CREATE INDEX idx_plants_nursery_created            ON plants(nursery_id, created_at DESC, id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_activity_logs_nursery_created     ON activity_logs(nursery_id, created_at DESC);
+CREATE INDEX idx_notifications_nursery_user_created ON notifications(nursery_id, user_id, created_at DESC);
+
+-- v2: per-nursery уникальность кодов растений (D8, миграция 20260724173000)
+-- глобальные UNIQUE(qr_code)/UNIQUE(numeric_code) сняты; уникальность теперь в пределах питомника
+CREATE UNIQUE INDEX uq_plants_nursery_qr           ON plants(nursery_id, qr_code)      WHERE qr_code IS NOT NULL;
+CREATE UNIQUE INDEX uq_plants_nursery_numeric_code ON plants(nursery_id, numeric_code) WHERE numeric_code IS NOT NULL;
+
+-- v2: защита системных строк справочников от дублей (D5, миграция 20260724170000)
+-- (обычный UNIQUE(nursery_id, …) не ловит системные строки: NULL'ы в UNIQUE различны)
+CREATE UNIQUE INDEX uq_production_stages_system_slug ON production_stages(slug) WHERE nursery_id IS NULL;
+CREATE UNIQUE INDEX uq_movement_types_system_slug    ON movement_types(slug)    WHERE nursery_id IS NULL;
+CREATE UNIQUE INDEX uq_container_types_system_code    ON container_types(code)   WHERE nursery_id IS NULL;
 
 -- ------------------------------------------------------------
 -- Seed: системные типы движений

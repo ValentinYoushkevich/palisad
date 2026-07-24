@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import * as gbifClient from '@/services/gbif.client.js';
 import {
   api,
   createOwnerWithNursery,
@@ -64,6 +65,25 @@ describe('M8 — Справочники', () => {
     const ctx = await createOwnerWithNursery();
     const res = await api().get(`/api/nurseries/${ctx.nurseryId}/species`).set('Cookie', ctx.cookie);
     expect(res.status).toBe(200);
+  });
+
+  // B19 — сбой GBIF не должен ронять весь поиск: локальные результаты отдаются, статус 200.
+  it('сбой GBIF → /species/search отдаёт локальные результаты (200, не 502)', async () => {
+    const ctx = await createOwnerWithNursery();
+    const base = `/api/nurseries/${ctx.nurseryId}`;
+    // Локальный вид, который найдётся без участия GBIF.
+    await api()
+      .post(`${base}/species/attach-by-name`)
+      .set('Cookie', ctx.cookie)
+      .send({ scientific_name: 'Acer platanoides', display_name_ru: 'Клён остролистный' });
+
+    // Теперь внешний GBIF-поиск падает.
+    gbifClient.searchSpecies.mockRejectedValueOnce(new Error('GBIF unavailable'));
+
+    const res = await api().get(`${base}/species/search?q=Acer`).set('Cookie', ctx.cookie);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
   });
 
   it('теги требуют feature_tags → 403', async () => {

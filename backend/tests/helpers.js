@@ -31,6 +31,26 @@ export async function loginCookie(email, password) {
   return { cookie: toCookieHeader(res.headers['set-cookie']), res };
 }
 
+// Реальный staff-логин через POST /api/auth/login. Сотрудники входят тем же
+// эндпоинтом, что и owner — staff-JWT несёт роль + nursery_id. В отличие от
+// authCookie/signAccess (который подписывает токен напрямую, минуя проверку
+// email/пароля и флаг must_change_password), здесь проходится настоящий путь входа.
+// По образцу loginCookie возвращает { cookie, res }, плюс удобный mustChangePassword.
+// Поддерживает обе формы: loginStaff({ email, password }) и
+// loginStaff(app, { email, password }).
+export async function loginStaff(appOrCreds, maybeCreds) {
+  const creds = maybeCreds ?? appOrCreds;
+  const targetApp = maybeCreds ? appOrCreds : app;
+  const res = await request(targetApp)
+    .post('/api/auth/login')
+    .send({ email: creds.email, password: creds.password });
+  return {
+    cookie: toCookieHeader(res.headers['set-cookie']),
+    res,
+    mustChangePassword: res.body?.mustChangePassword,
+  };
+}
+
 // Регистрирует владельца, создаёт питомник, перелогинивается (чтобы в JWT попал
 // nurseryId). Возвращает cookie-заголовок и записи account/nursery/owner.
 export async function createOwnerWithNursery(overrides = {}) {

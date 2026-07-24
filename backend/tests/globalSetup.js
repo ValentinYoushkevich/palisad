@@ -59,6 +59,21 @@ const SYSTEM_CONTAINER_TYPES = [
 ];
 
 export async function setup() {
+  // 0. Ранняя валидация окружения. Без полного набора DB_* служебное подключение к
+  //    postgres падает невнятно (ECONNREFUSED / password authentication failed) уже на
+  //    этапе connect — поэтому сначала явно проверяем обязательные переменные.
+  const REQUIRED_ENV = ['DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD'];
+  const missingEnv = REQUIRED_ENV.filter((key) => {
+    const value = process.env[key];
+    return value === undefined || value === '';
+  });
+  if (missingEnv.length) {
+    throw new Error(
+      `Неполное тестовое окружение: не заданы обязательные переменные ${missingEnv.join(', ')}. ` +
+        'Проверьте backend/.env (см. .env.example) перед запуском тестов.',
+    );
+  }
+
   // 1. Создать тестовую БД, если её нет (через служебное подключение к основной БД).
   const admin = knex({
     client: 'pg',

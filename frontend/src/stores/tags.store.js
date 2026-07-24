@@ -30,6 +30,9 @@ export const useTagsStore = defineStore('tags', {
         return { ok: true }
       } catch (error) {
         this.tagsError = error?.response?.data?.error || 'Не удалось загрузить теги.'
+        // F11: офлайн/сетевой сбой — поднимаем теги из кэша Dexie, чтобы фильтр по тегам
+        // работал без сети.
+        await this.loadFromLocal()
         return { ok: false, error: this.tagsError }
       } finally {
         this.isLoading = false

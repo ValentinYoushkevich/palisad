@@ -5,6 +5,7 @@ import {
   createOwnerWithNursery,
   db,
   loginCookie,
+  loginStaff,
   setFreePlan,
   uniqueEmail,
 } from './helpers.js';
@@ -34,7 +35,7 @@ describe('B11 — staff-логин и RBAC', () => {
     const ctx = await createOwnerWithNursery();
     const staff = await createStaffLogin(ctx, 'agronomist');
 
-    const { res } = await loginCookie(staff.email, staff.password);
+    const { res } = await loginStaff({ email: staff.email, password: staff.password });
     expect(res.status).toBe(200);
     expect(res.body.user.role).toBe('agronomist');
     expect(res.body.user.email).toBe(staff.email);
@@ -48,7 +49,7 @@ describe('B11 — staff-логин и RBAC', () => {
     const ctx = await createOwnerWithNursery();
     const staff = await createStaffLogin(ctx, 'worker');
 
-    const { res } = await loginCookie(staff.email, 'WrongPass9!');
+    const { res } = await loginStaff({ email: staff.email, password: 'WrongPass9!' });
     expect(res.status).toBe(401);
   });
 
@@ -61,7 +62,7 @@ describe('B11 — staff-логин и RBAC', () => {
       .patch(`/api/nurseries/${ctx.nurseryId}/users/${staff.user.id}/status`)
       .set('Cookie', ctx.cookie);
 
-    const { res } = await loginCookie(staff.email, staff.password);
+    const { res } = await loginStaff({ email: staff.email, password: staff.password });
     expect(res.status).toBe(401);
     expect(res.body.error).toBe('Неверный email или пароль');
   });
@@ -71,7 +72,7 @@ describe('B11 — staff-логин и RBAC', () => {
     const ctx = await createOwnerWithNursery();
     const staff = await createStaffLogin(ctx, 'agronomist');
 
-    const first = await loginCookie(staff.email, staff.password);
+    const first = await loginStaff({ email: staff.email, password: staff.password });
     expect(first.res.status).toBe(200);
     expect(first.res.body.mustChangePassword).toBe(true);
 
@@ -82,11 +83,11 @@ describe('B11 — staff-логин и RBAC', () => {
     expect(change.status).toBe(200);
 
     // Старый временный пароль больше не подходит.
-    const oldLogin = await loginCookie(staff.email, staff.password);
+    const oldLogin = await loginStaff({ email: staff.email, password: staff.password });
     expect(oldLogin.res.status).toBe(401);
 
     // Новый пароль работает, флаг снят у ИМЕННО этого сотрудника.
-    const relogin = await loginCookie(staff.email, NEW_PASSWORD);
+    const relogin = await loginStaff({ email: staff.email, password: NEW_PASSWORD });
     expect(relogin.res.status).toBe(200);
     expect(relogin.res.body.mustChangePassword).toBe(false);
     const dbUser = await db('users').where({ id: staff.user.id }).first();
@@ -102,7 +103,7 @@ describe('B11 — staff-логин и RBAC', () => {
     await setFreePlan({ user_limit: 10 });
     const ctx = await createOwnerWithNursery();
     const staff = await createStaffLogin(ctx, 'observer');
-    const login = await loginCookie(staff.email, staff.password);
+    const login = await loginStaff({ email: staff.email, password: staff.password });
 
     const res = await api()
       .post('/api/auth/change-password')
@@ -115,7 +116,7 @@ describe('B11 — staff-логин и RBAC', () => {
     await setFreePlan({ user_limit: 10 });
     const ctx = await createOwnerWithNursery();
     const staff = await createStaffLogin(ctx, 'agronomist');
-    const login = await loginCookie(staff.email, staff.password);
+    const login = await loginStaff({ email: staff.email, password: staff.password });
 
     await api()
       .patch(`/api/nurseries/${ctx.nurseryId}/users/${staff.user.id}/status`)
@@ -134,14 +135,14 @@ describe('B11 — staff-логин и RBAC', () => {
     const observer = await createStaffLogin(ctx, 'observer');
     const agronomist = await createStaffLogin(ctx, 'agronomist');
 
-    const observerLogin = await loginCookie(observer.email, observer.password);
+    const observerLogin = await loginStaff({ email: observer.email, password: observer.password });
     const denied = await api()
       .post(`/api/nurseries/${ctx.nurseryId}/locations`)
       .set('Cookie', observerLogin.cookie)
       .send({ name: 'Denied Area', type: 'area' });
     expect(denied.status).toBe(403);
 
-    const agroLogin = await loginCookie(agronomist.email, agronomist.password);
+    const agroLogin = await loginStaff({ email: agronomist.email, password: agronomist.password });
     const allowed = await api()
       .post(`/api/nurseries/${ctx.nurseryId}/locations`)
       .set('Cookie', agroLogin.cookie)
@@ -164,7 +165,7 @@ describe('B11 — staff-логин и RBAC', () => {
       .whereNot({ id: ctx.nurseryId })
       .first();
 
-    const staffLogin = await loginCookie(staff.email, staff.password);
+    const staffLogin = await loginStaff({ email: staff.email, password: staff.password });
 
     const own = await api()
       .get(`/api/nurseries/${ctx.nurseryId}/locations`)
@@ -181,7 +182,7 @@ describe('B11 — staff-логин и RBAC', () => {
     await setFreePlan({ user_limit: 10 });
     const ctx = await createOwnerWithNursery();
     const staff = await createStaffLogin(ctx, 'worker');
-    const login = await loginCookie(staff.email, staff.password);
+    const login = await loginStaff({ email: staff.email, password: staff.password });
 
     const refreshed = await api().post('/api/auth/refresh').set('Cookie', login.cookie);
     expect(refreshed.status).toBe(200);
@@ -194,7 +195,7 @@ describe('B11 — staff-логин и RBAC', () => {
     await setFreePlan({ user_limit: 10 });
     const ctx = await createOwnerWithNursery();
     const staff = await createStaffLogin(ctx, 'worker');
-    const login = await loginCookie(staff.email, staff.password);
+    const login = await loginStaff({ email: staff.email, password: staff.password });
 
     await api()
       .patch(`/api/nurseries/${ctx.nurseryId}/users/${staff.user.id}/status`)

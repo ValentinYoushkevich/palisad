@@ -32,6 +32,9 @@ export const useSpeciesStore = defineStore('species', {
         return { ok: true }
       } catch (error) {
         this.speciesError = error?.response?.data?.error || 'Не удалось загрузить виды.'
+        // F11: офлайн/сетевой сбой — поднимаем справочник из кэша Dexie, чтобы фильтры и
+        // названия видов работали без сети (иначе loadFromLocal был мёртвым кодом).
+        await this.loadFromLocal()
         return { ok: false, error: this.speciesError }
       } finally {
         this.isLoading = false

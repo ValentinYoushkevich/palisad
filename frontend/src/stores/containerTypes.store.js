@@ -35,6 +35,9 @@ export const useContainerTypesStore = defineStore('containerTypes', {
         return { ok: true }
       } catch (error) {
         this.containerTypesError = error?.response?.data?.error || 'Не удалось загрузить типы контейнеров.'
+        // F11: офлайн/сетевой сбой — поднимаем типы контейнеров из кэша Dexie, чтобы
+        // фильтр и названия контейнеров работали без сети.
+        await this.loadFromLocal()
         return { ok: false, error: this.containerTypesError }
       } finally {
         this.isLoading = false

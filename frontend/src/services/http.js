@@ -26,9 +26,12 @@ async function refreshAccessToken() {
   return response?.status >= 200 && response?.status < 300
 }
 
-function logoutAndRedirect() {
+async function logoutAndRedirect() {
   const authStore = useAuthStore()
-  authStore.clearSession()
+  // F6: невалидный refresh (401) → сессия мертва → чистим офлайн-данные прошлого аккаунта
+  // (Dexie + SW api-кэш) ДО навигации, чтобы следующий пользователь браузера не увидел
+  // чужие растения офлайн. Дожидаемся очистки перед redirect.
+  await authStore.clearSession()
 
   // Avoid recursive reloads when refresh fails on the login page.
   if (globalThis.location.pathname === '/login' || isRedirectingToLogin) {
@@ -69,7 +72,7 @@ http.interceptors.response.use(
 
     if (status !== 401 || originalRequest._retry || isRefreshRequest || isLoginRequest) {
       if (status === 401 && isRefreshRequest) {
-        logoutAndRedirect()
+        await logoutAndRedirect()
       }
       throw error
     }

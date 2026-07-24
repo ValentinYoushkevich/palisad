@@ -53,6 +53,55 @@ describe('M9 — Реестр растений', () => {
     expect(res.status).toBe(404);
   });
 
+  it('одинаковый qr_code/numeric_code в РАЗНЫХ питомниках допустим (D8)', async () => {
+    const a = await createOwnerWithNursery();
+    const b = await createOwnerWithNursery();
+    const qr = 'PAL-DUP-001';
+    const code = '99887766';
+    await db('plants').insert({ nursery_id: a.nurseryId, qr_code: qr, numeric_code: code });
+    // Те же коды во втором питомнике не конфликтуют — уникальность теперь per-nursery.
+    await db('plants').insert({ nursery_id: b.nurseryId, qr_code: qr, numeric_code: code });
+    const rows = await db('plants').where({ numeric_code: code });
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((r) => r.nursery_id)).size).toBe(2);
+  });
+
+  it('дубликат numeric_code в ОДНОМ питомнике запрещён (D8)', async () => {
+    const ctx = await createOwnerWithNursery();
+    const code = '55443322';
+    await db('plants').insert({ nursery_id: ctx.nurseryId, qr_code: 'PAL-U-1', numeric_code: code });
+    await expect(
+      db('plants').insert({ nursery_id: ctx.nurseryId, qr_code: 'PAL-U-2', numeric_code: code })
+    ).rejects.toThrow();
+  });
+
+  it('дубликат qr_code в ОДНОМ питомнике запрещён (D8)', async () => {
+    const ctx = await createOwnerWithNursery();
+    await db('plants').insert({ nursery_id: ctx.nurseryId, qr_code: 'PAL-Q-DUP', numeric_code: '10000001' });
+    await expect(
+      db('plants').insert({ nursery_id: ctx.nurseryId, qr_code: 'PAL-Q-DUP', numeric_code: '10000002' })
+    ).rejects.toThrow();
+  });
+
+  it('сканер не находит код из чужого питомника → 404, в своём → 200', async () => {
+    const a = await createOwnerWithNursery();
+    const b = await createOwnerWithNursery();
+    const plantA = (await createPlant(a)).body;
+
+    // Код растения питомника A ищем в скоупе питомника B — 404 (изоляция чтения).
+    const crossQr = await api().get(`${plantsBase(b)}/by-qr/${plantA.qr_code}`).set('Cookie', b.cookie);
+    const crossCode = await api()
+      .get(`${plantsBase(b)}/by-code/${plantA.numeric_code}`)
+      .set('Cookie', b.cookie);
+    expect(crossQr.status).toBe(404);
+    expect(crossCode.status).toBe(404);
+
+    // В своём питомнике A тот же код находится.
+    const ownQr = await api().get(`${plantsBase(a)}/by-qr/${plantA.qr_code}`).set('Cookie', a.cookie);
+    expect(ownQr.status).toBe(200);
+    expect(ownQr.body.id).toBe(plantA.id);
+  });
+
   it('мягкое удаление не физическое', async () => {
     const ctx = await createOwnerWithNursery();
     const plant = (await createPlant(ctx)).body;

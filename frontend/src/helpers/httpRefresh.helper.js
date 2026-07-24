@@ -12,7 +12,7 @@ export async function refreshAndRetryRequest({
     return await http(originalRequest)
   } catch (refreshError) {
     rejectPendingRequests()
-    logoutAndRedirect()
+    await logoutAndRedirect()
     throw refreshError
   }
 }

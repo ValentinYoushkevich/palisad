@@ -33,6 +33,9 @@ export const useProductionStagesStore = defineStore('productionStages', {
         return { ok: true }
       } catch (error) {
         this.stagesError = error?.response?.data?.error || 'Не удалось загрузить стадии.'
+        // F11: офлайн/сетевой сбой — поднимаем производственные стадии из кэша Dexie, чтобы
+        // названия/фильтр по стадиям работали без сети.
+        await this.loadFromLocal()
         return { ok: false, error: this.stagesError }
       } finally {
         this.isLoading = false

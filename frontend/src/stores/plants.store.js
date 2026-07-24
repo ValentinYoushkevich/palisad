@@ -270,13 +270,24 @@ export const usePlantsStore = defineStore('plants', {
         return local
       }
 
-      if (isOnline.value) {
-        const nurseryStore = useNurseryStore()
-        const response = await http.get(`/nurseries/${nurseryStore.nurseryId}/plants/by-qr/${qrCode}`)
-        return response?.data || null
+      if (!isOnline.value) {
+        return null
       }
 
-      return null
+      // F12: ловим ошибки HTTP, чтобы сканер не падал с unhandled rejection и не завис в
+      // loading. 404 (в т.ч. код из другого питомника — эндпоинт nursery-скоупный) и прочие
+      // ошибки трактуем как «не найдено»: страница покажет понятное сообщение.
+      const nurseryStore = useNurseryStore()
+
+      try {
+        const response = await http.get(`/nurseries/${nurseryStore.nurseryId}/plants/by-qr/${qrCode}`)
+        return response?.data || null
+      } catch (error) {
+        if (error?.response?.status !== 404 && import.meta.env.DEV) {
+          console.warn('findByQr failed', error)
+        }
+        return null
+      }
     },
 
     async findByNumericCode(code) {
@@ -287,13 +298,22 @@ export const usePlantsStore = defineStore('plants', {
         return local
       }
 
-      if (isOnline.value) {
-        const nurseryStore = useNurseryStore()
-        const response = await http.get(`/nurseries/${nurseryStore.nurseryId}/plants/by-code/${code}`)
-        return response?.data || null
+      if (!isOnline.value) {
+        return null
       }
 
-      return null
+      // F12: см. findByQr — не даём HTTP-ошибке (404/сеть/сервер) уронить сканер.
+      const nurseryStore = useNurseryStore()
+
+      try {
+        const response = await http.get(`/nurseries/${nurseryStore.nurseryId}/plants/by-code/${code}`)
+        return response?.data || null
+      } catch (error) {
+        if (error?.response?.status !== 404 && import.meta.env.DEV) {
+          console.warn('findByNumericCode failed', error)
+        }
+        return null
+      }
     },
 
     async refreshPlant(id) {

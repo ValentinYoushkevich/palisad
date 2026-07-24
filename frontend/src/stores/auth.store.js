@@ -1,4 +1,6 @@
 import { clearDomainTables } from '@/db/indexedDb'
+import { getPendingPhotos } from '@/db/pendingPhotos.service'
+import { getFailedCount, getPending } from '@/db/syncQueue.service'
 import http from '@/services/http'
 import { useNotificationsStore } from '@/stores/notifications.store'
 import { clearCachedNurseryContext, useNurseryStore } from '@/stores/nursery.store'
@@ -135,18 +137,36 @@ export const useAuthStore = defineStore('auth', {
         this.isLoading = false
       }
     },
-    async logout() {
+    async hasUnsyncedData() {
+      const [pending, failed, pendingPhotos] = await Promise.all([
+        getPending(),
+        getFailedCount(),
+        getPendingPhotos()
+      ])
+
+      return pending.length > 0 || failed > 0 || pendingPhotos.length > 0
+    },
+    async logout({ force = false } = {}) {
+      // F5: logout деструктивен — clearSession → clearDomainTables чистит sync_queue и
+      // pending_photos. Без явного force сначала проверяем несинхронизированную очередь и
+      // сигналим вызывающему (pending: true), чтобы UI показал подтверждение и не потерял
+      // данные молча (по образцу гарда ensureCanSwitch при переключении питомника).
+      if (!force && await this.hasUnsyncedData()) {
+        return { ok: false, pending: true }
+      }
+
       const nurseryStore = useNurseryStore()
       const notificationsStore = useNotificationsStore()
 
       try {
         await http.post('/auth/logout')
       } finally {
-        this.clearSession()
+        await this.clearSession()
         nurseryStore.resetState()
         notificationsStore.resetState()
-        await clearDomainTables()
       }
+
+      return { ok: true }
     },
     async initAuth() {
       if (this.isAuthInitialized) {
@@ -183,14 +203,14 @@ export const useAuthStore = defineStore('auth', {
           return
         }
 
-        this.clearSession()
+        await this.clearSession()
       } catch (error) {
         const status = error?.response?.status
         // Только явный отказ авторизации (401) сбрасывает сессию. Сетевая/офлайн-ошибка
         // рефреша НЕ должна разлогинивать — иначе офлайн-старт с валидной сессией из
         // localStorage выбрасывает на /login (F4).
         if (status === 401) {
-          this.clearSession()
+          await this.clearSession()
         } else if (import.meta.env.DEV) {
           console.warn('initAuth network error, keeping cached session', error)
         }
@@ -211,7 +231,9 @@ export const useAuthStore = defineStore('auth', {
 
         if (nextUser) {
           this.setUser(nextUser)
-          return
+          // F10: раньше здесь был голый `return` (undefined) → ChangePasswordPage
+          // трактовал успех как ошибку (`if (!result?.ok)`). Возвращаем явный ok.
+          return { ok: true }
         }
 
         if (this.user) {
@@ -229,7 +251,7 @@ export const useAuthStore = defineStore('auth', {
         this.isLoading = false
       }
     },
-    clearSession() {
+    async clearSession() {
       this.clearTokens()
       this.setUser(null)
       // Чистим офлайн-кэш контекста питомника, чтобы он не протёк на следующего
@@ -237,9 +259,36 @@ export const useAuthStore = defineStore('auth', {
       clearCachedNurseryContext()
       // Session has been checked and is empty; do not re-run refresh on every navigation.
       this.isAuthInitialized = true
+      // F6: доменные данные (Dexie) и SW-кэш ответов /api/ тоже принадлежат прошлому
+      // аккаунту — без их очистки следующий пользователь того же браузера видел бы чужие
+      // растения офлайн. Централизуем здесь: вызывается и при вынужденном сбросе по 401
+      // (истёкший refresh в http.js), и при явном logout (уже после гарда F5).
+      await clearDomainTables()
+      await clearOfflineCaches()
     }
   }
 })
+
+// F6: удаляем только кэши ответов /api/ (растения/справочники прошлого аккаунта). App shell
+// и хэшированные ассеты — это код приложения, не пользовательские данные, их сохраняем,
+// чтобы офлайн-оболочка продолжала открываться. Имена кэшей заданы в public/sw.js
+// (palisad-api-*), плюс подхватываем возможный легаси api-v1 от старого Workbox.
+async function clearOfflineCaches() {
+  if (typeof caches === 'undefined') {
+    return
+  }
+
+  try {
+    const keys = await caches.keys()
+    await Promise.all(
+      keys.filter((key) => key.includes('api')).map((key) => caches.delete(key))
+    )
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.warn('Failed to clear offline API caches', error)
+    }
+  }
+}
 
 function roleToLabel(role) {
   const roleLabels = {

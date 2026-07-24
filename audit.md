@@ -68,7 +68,22 @@
   `20260724160000` (photos→bytea) обратимы. Приёмка `acceptance-check.mjs` обновлена под новые
   контракты (live staff-логин M17, фото multipart/content, смена плана → 403). 4 домена —
   параллельными агентами, пересечений файлов нет. Коммит — за пользователем.
-- Пункт 6 — не начат.
+- **✅ Пункт 6 «Остальное» — «Важно» выполнено 2026-07-24.** Закрыты backend B14 (rate-limit
+  login/refresh), B16 (PATCH операции → 400 вместо 500), B19 (GBIF `allSettled` + таймаут fetch),
+  B21 (Zod-валидация пагинации, perPage ≤100); frontend F5 (гард logout от потери очереди), F6
+  (очистка Dexie + `/api`-кэшей в clearSession), F10 (успех смены пароля), F11 (офлайн-фолбэк
+  справочников в 6 сторах), F12 (сканер try/catch + 404→«не найдено»), F14 (перезагрузка при
+  смене SW); БД D4 (сид — единый провижинер справочников), D5 (partial-unique системных строк),
+  D6 (композитные индексы горячих запросов), D7 (notifications updated_at + CHECK type), D8
+  (per-nursery unique кодов растений + скоуп сканера); тесты T8 (реальный staff-логин), T9
+  (валидация env в globalSetup), T10 (контракт-тест GBIF). Прогоны: backend **226/226**
+  (покрытие 94.5/87/97.5/94.5, пороги 90/80), frontend **53/53**, оба линта 0 ошибок. Миграции
+  `20260724170000`–`20260724173000` обратимы; `documentation/schema.sql` синхронизирован. B18
+  снят ещё через F13. Инфра-находки (B20/B29/B34) отложены по решению; «Незначительно» (~36) —
+  следующим заходом. 5 доменов — параллельными агентами, пересечений файлов нет. Коммит — за
+  пользователем.
+  Заметка эксплуатации: D5 на проде с уже существующими дублями системных строк потребует
+  дедупликации перед `CREATE UNIQUE INDEX`.
 
 ---
 
@@ -221,7 +236,7 @@ RBAC-механика в рантайме пока декоративна (B11).
   activity_logs). Trial бессрочен; тип `SUBSCRIPTION_EXPIRING` (`notification.constants.js:7`)
   объявлен, но продюсера не имеет.
 
-- **B14. Нет rate limiting (включая /login и /refresh).**
+- **B14. Нет rate limiting (включая /login и /refresh).** ✅ **Исправлено 2026-07-24** — `express-rate-limit`: общий лимитер на `/api` + строгий на `POST /auth/login` и `/auth/refresh` (429 при брутфорсе); в NODE_ENV=test лимиты сняты, кроме целевого теста.
   `backend/app.js` — ни `express-rate-limit`, ни аналога. Брутфорс по `POST /api/auth/login`
   ничем не ограничен.
 
@@ -234,7 +249,7 @@ RBAC-механика в рантайме пока декоративна (B11).
   Потеря данных при любом частичном обновлении.
   *Исправление:* собирать объект update из реально переданных ключей (образец — `location.service.updateLocation`).
 
-- **B16. PATCH операции падает с 500 на валидном входе.**
+- **B16. PATCH операции падает с 500 на валидном входе.** ✅ **Исправлено 2026-07-24** — `updateOperation` собирает UPDATE по whitelist (реально патчабелен только `notes`); `type`/`newContainerId`/`newStageId` через PATCH → `AppError(400)` вместо SQL-500.
   `backend/src/utils/validators/operation.validators.js:12-17` + `operation.service.js:83` —
   схема разрешает `newContainerId/newStageId`, а сервис передаёт body напрямую в
   `UPDATE operations`, где таких колонок нет → SQL-ошибка 500. Смена `type` через PATCH не
@@ -248,11 +263,11 @@ RBAC-механика в рантайме пока декоративна (B11).
   `staff.controller.js:29` и далее — создание/обновление сотрудника возвращает клиенту всю
   строку users, включая Argon2-хэш. Явно перечислить возвращаемые колонки.
 
-- **B18. attachPhoto без валидации входа.**
+- **B18. attachPhoto без валидации входа.** ✅ **Снято 2026-07-24 (через F13)** — старый невалидируемый `{url}`-путь удалён; фото принимается только multipart image-файлом (multer, 512 КБ, image-only), `req.body.url` в БД больше не пишется.
   `backend/src/routes/operation.router.js:31` (нет `validate(...)`) — `req.body.url` пишется
   в БД без Zod: любая длина, любой контент, включая `javascript:`-URI (stored-XSS-вектор для фронта).
 
-- **B19. GBIF-сбой ломает весь поиск видов; fetch без таймаута.**
+- **B19. GBIF-сбой ломает весь поиск видов; fetch без таймаута.** ✅ **Исправлено 2026-07-24** — GBIF-ветка через `Promise.allSettled` (локальные результаты отдаются при сбое GBIF, не 502); `gbifFetch` с AbortController + таймаут 5 с.
   `backend/src/services/dictionary.service.js:22-26` — `Promise.all` с GBIF: при его
   недоступности весь `/species/search` возвращает 502, хотя локальные результаты есть
   (нужен `Promise.allSettled`). `gbif.client.js:7-9, 24` — fetch без AbortController/таймаута.
@@ -262,7 +277,7 @@ RBAC-механика в рантайме пока декоративна (B11).
   `backend/Dockerfile` — `CMD ["npm","run","start"]`: npm не пробрасывает SIGTERM в node →
   контейнер убивается по таймауту; нет `USER` (root) и `HEALTHCHECK`.
 
-- **B21. Пагинация уведомлений/журнала без валидации и верхней границы.**
+- **B21. Пагинация уведомлений/журнала без валидации и верхней границы.** ✅ **Исправлено 2026-07-24** — `paginationSchema`/`parsePagination` (page≥1, perPage зажат 1..100, дефолт 20, мусор→дефолт) в notification/activityLog сервисах; `perPage=1000000`/`page=abc` больше не выгружают таблицу и не дают 500.
   `backend/src/services/notification.service.js:5-7`, `activityLog.service.js:4-6` —
   `Number(page)/Number(perPage)` без Zod: `perPage=1000000` выгружает таблицу,
   `page=abc` → NaN → 500. Ввести схему с `max(100)` (образец — `plantFiltersSchema`).
@@ -365,12 +380,12 @@ RBAC-механика в рантайме пока декоративна (B11).
 
 ### Важно
 
-- **F5. Logout стирает несинхронизированную очередь без предупреждения.**
+- **F5. Logout стирает несинхронизированную очередь без предупреждения.** ✅ **Исправлено 2026-07-24** — `logout({force})` + `hasUnsyncedData()` (sync_queue/pending_photos); при непустой очереди возвращает `{ok:false, pending:true}`, компоненты (AppLayout/ChangePasswordPage) показывают подтверждение перед разрушением.
   `frontend/src/stores/auth.store.js:138-149` — `logout()` вызывает `clearDomainTables()`,
   а `DOMAIN_TABLES` (`db/indexedDb.js:37-53`) включает `sync_queue` и `pending_photos`.
   Гарда, аналогичного `ensureCanSwitch`, нет — офлайн-работа теряется молча.
 
-- **F6. Кросс-аккаунтная утечка кэша при истечении сессии.**
+- **F6. Кросс-аккаунтная утечка кэша при истечении сессии.** ✅ **Исправлено 2026-07-24** — `clearSession` (async) чистит Dexie (`clearDomainTables`) и `/api`-кэши (`clearOfflineCaches`); app-shell/ассеты сохраняются ради офлайн-оболочки; вызовы в http.js/initAuth переведены на `await`.
   `frontend/src/services/http.js:29-40` — по невалидному refresh вызывается
   `clearSession()` (`auth.store.js:227-232`), который не чистит IndexedDB и SW-кэш:
   следующий пользователь браузера офлайн увидит чужие растения, а чужая `sync_queue` уйдёт
@@ -409,19 +424,19 @@ RBAC-механика в рантайме пока декоративна (B11).
   (строки 190-191) не трогает Dexie — офлайн растение «воскресает». Корректный паттерн есть
   в `productionStages.store.js:31-32` (`clearTable` + `upsert`).
 
-- **F10. Успешная смена пароля показывается как ошибка.**
+- **F10. Успешная смена пароля показывается как ошибка.** ✅ **Исправлено 2026-07-24** — успешная ветка `changePassword` возвращает `{ ok: true }`; `ChangePasswordPage` больше не показывает ложную ошибку.
   `frontend/src/stores/auth.store.js:205-210` — при успехе action делает `return` без
   значения; `ChangePasswordPage.vue:73-77` проверяет `if (!result?.ok)` → пользователь видит
   «Не удалось обновить пароль», хотя пароль сменён. *Исправление:* `return { ok: true }`.
 
-- **F11. Справочники не читаются из кэша офлайн — `loadFromLocal` мёртв в 6 сторах.**
+- **F11. Справочники не читаются из кэша офлайн — `loadFromLocal` мёртв в 6 сторах.** ✅ **Исправлено 2026-07-24** — catch-ветка `fetch*` всех 6 справочных сторов (species/locations/tags/containerTypes/movementTypes/productionStages) зовёт `loadFromLocal()`; офлайн фильтры и названия работают из Dexie.
   `PlantsPage.vue:130-144`, `PlantDetailPage.vue:137-158` — офлайн fetch-методы возвращают
   `{ok:false}` и списки пусты; `loadFromLocal` в `species.store.js:41`, `locations.store.js:44`,
   `tags.store.js:39`, `containerTypes.store.js:44`, `movementTypes.store.js:41`,
   `productionStages.store.js:42` не вызываются нигде. Офлайн пропадают фильтры и названия
   локаций/стадий/типов.
 
-- **F12. Сканер: необработанные исключения и зависший спиннер.**
+- **F12. Сканер: необработанные исключения и зависший спиннер.** ✅ **Исправлено 2026-07-24** — `findByQr`/`findByNumericCode` в try/catch (404/500→null), `handleScanned`/`handleManualSearch` в try/catch с `finally { isSearching=false }`; 404 (в т.ч. кросс-nursery код от D8) → «не найдено», не краш.
   `frontend/src/stores/plants.store.js:259-262, 276-279` — онлайн-ветки `findByQr/findByNumericCode`
   не ловят ошибки HTTP; `ScannerPage.vue:82-98` — при исключении `isSearching.value = false`
   не выполняется: кнопка навсегда в loading; в `handleScanned` (58-68) — unhandled rejection.
@@ -440,7 +455,7 @@ RBAC-механика в рантайме пока декоративна (B11).
   в `plants.store.js:313-315` и `movements.store.js:131-133`.
   *Исправление:* удалить или доделать (Blob + FormData либо base64).
 
-- **F14. Обновление версии PWA: `skipWaiting` без перезагрузки клиентов.**
+- **F14. Обновление версии PWA: `skipWaiting` без перезагрузки клиентов.** ✅ **Исправлено 2026-07-24** — `controllerchange` перезагружает клиента один раз при смене уже активного SW (первую установку не трогает, guard от петли); синхронизирует бандл с новым кэшем.
   `frontend/public/sw.js:5-6` + `registerServiceWorker.js:53-55` — новый SW мгновенно
   перехватывает клиентов, но `controllerchange` только логирует: старое приложение работает
   с новым кэшем (возможны падения ленивых чанков), подсказки «доступна новая версия» нет.
@@ -526,20 +541,20 @@ RBAC-механика в рантайме пока декоративна (B11).
   (`001_mvp_seed.js:48-50`: `TRENCH/COLD_STORAGE/GREENHOUSE`).
   *Исправление:* перегенерировать из фактической БД (`pg_dump --schema-only`).
 
-- **D4. Справочные данные разъехались между миграциями и сидами.**
+- **D4. Справочные данные разъехались между миграциями и сидами.** ✅ **Исправлено 2026-07-24** — сид (`001_mvp_seed.js`) стал единым идемпотентным провижинером всех трёх системных справочников (movement_types/container_types/production_stages); дублирующий data-insert стадий убран из миграции `20260614140000` (DDL не тронут).
   `20260614140000_create_production_stages.js:1-6, 54-56` — системные стадии зашиты в
   миграцию, тогда как системные `movement_types`/`container_types` существуют только в сиде.
   Свежая БД «только миграции» получает стадии, но не типы движений — `arrival/sale/write_off`
   неработоспособны. Плюс дублирование 4 стадий в миграции и сиде.
   *Исправление:* один механизм провижининга системных справочников (идемпотентный сид) для всех трёх таблиц.
 
-- **D5. Системные строки справочников не защищены UNIQUE из-за NULL.**
+- **D5. Системные строки справочников не защищены UNIQUE из-за NULL.** ✅ **Исправлено 2026-07-24** — миграция `20260724170000`: partial-unique `WHERE nursery_id IS NULL` на production_stages(slug)/movement_types(slug)/container_types(code). Заметка: на проде с уже существующими дублями индекс упадёт — нужна предварительная дедупликация.
   `20260614140000:14, 22` — `nursery_id` nullable + `UNIQUE(nursery_id, slug)`: в PostgreSQL
   NULL'ы в unique различны, системные строки можно дублировать. То же у `movement_types`
   (init:121) и `container_types` (init:139).
   *Исправление:* partial unique `... WHERE nursery_id IS NULL` либо `UNIQUE NULLS NOT DISTINCT` (PG15+).
 
-- **D6. Горячие запросы не покрыты композитными индексами.**
+- **D6. Горячие запросы не покрыты композитными индексами.** ✅ **Исправлено 2026-07-24** — миграция `20260724171000`: `plants(nursery_id, created_at DESC, id) WHERE deleted_at IS NULL`, `activity_logs(nursery_id, created_at DESC)`, `notifications(nursery_id, user_id, created_at DESC)`.
   Реестр растений (`plant.repository.js:52-74`): `WHERE nursery_id AND deleted_at IS NULL
   ORDER BY created_at DESC, id` — есть только `idx_plants_active(nursery_id)` (init:227),
   нужен `(nursery_id, created_at DESC, id) WHERE deleted_at IS NULL`.
@@ -549,12 +564,12 @@ RBAC-механика в рантайме пока декоративна (B11).
   без `created_at`; `idx_notifications_created_at` не используется ни одним запросом,
   нужен `(nursery_id, user_id, created_at DESC)`.
 
-- **D7. notifications нарушает заявленные принципы схемы.**
+- **D7. notifications нарушает заявленные принципы схемы.** ✅ **Исправлено 2026-07-24** — миграция `20260724172000`: `notifications.updated_at` (NOT NULL DEFAULT now()) + `chk_notifications_type` CHECK по полному списку типов из `notification.constants.js`.
   `20260614130000_create_notifications.js:5-13` — таблица мутируемая (`is_read`), но
   `updated_at` отсутствует; `type` — свободный текст без CHECK, хотя у всех остальных таблиц
   CHECK-и есть.
 
-- **D8. Глобальная уникальность numeric_code/qr_code не адаптирована к мультитенантности.**
+- **D8. Глобальная уникальность numeric_code/qr_code не адаптирована к мультитенантности.** ✅ **Исправлено 2026-07-24** — миграция `20260724173000`: сняты глобальные `UNIQUE(qr_code)`/`UNIQUE(numeric_code)`, добавлены составные partial `(nursery_id, qr_code)`/`(nursery_id, numeric_code)`; `findByQrCode`/`findByNumericCode` и генератор кода заскоуплены по питомнику (сканер строго nursery-scoped, кросс-nursery код → 404).
   `20260408073000:151-152` — `UNIQUE(qr_code)`/`UNIQUE(numeric_code)` глобальные;
   8-значный код генерируется из `Date.now()` (`plant.service.js:184-194`) в общем на всех
   tenant'ов пространстве: коды конкурируют между питомниками, вероятность коллизий растёт с
@@ -670,13 +685,13 @@ RBAC-механика в рантайме пока декоративна (B11).
   (dictionary.test.js, plants.test.js, operations.test.js и др.). Худшее —
   productionStages.test.js: `expect(dup.status).toBeGreaterThanOrEqual(400)` принимает и 500,
   маскируя немаппированную unique-ошибку (должен быть 409 через маппинг 23505).
-- **T8. Staff-аутентификация в тестах подделывается.** `helpers.js` подписывает JWT напрямую
+- **T8. Staff-аутентификация в тестах подделывается.** ✅ **Исправлено 2026-07-24** — добавлен аддитивный `loginStaff` (реальный `POST /auth/login`) в `helpers.js`, `staffAuth.test.js` переведён на него; сценарий «staff логинится → must_change_password → смена → работает» уже был покрыт. `helpers.js` подписывает JWT напрямую
   через `signAccess`, минуя логин (сам комментарий признаёт «staff не логинятся через API» —
   см. B11). Сценарий «staff логинится → обязан сменить пароль → работает» не проходится нигде.
-- **T9. Хрупкость tests/globalSetup.js.** Для `CREATE DATABASE palisad_test` подключается к
+- **T9. Хрупкость tests/globalSetup.js.** ✅ **Исправлено 2026-07-24** — ранняя валидация обязательных env (DB_HOST/PORT/USER/PASSWORD) с внятной ошибкой до connect; логика миграций/сида не тронута. Для `CREATE DATABASE palisad_test` подключается к
   основной БД (`DB_NAME || 'palisad'`) — падает невнятно при неполном .env; валидации env нет.
   `fileParallelism: false` — сюита строго последовательная.
-- **T10. GBIF-мок — риск дрейфа контракта.** Интеграционные тесты мокают весь
+- **T10. GBIF-мок — риск дрейфа контракта.** ✅ **Исправлено 2026-07-24** — `gbifContract.test.js`: реалистичная фикстура ответа GBIF `/species/search` + проверка маппинга во внутреннюю форму (ловит дрейф формы). Интеграционные тесты мокают весь
   `gbif.client.js`, юнит мокает `global.fetch` рукописными фикстурами; реальная форма ответов
   GBIF нигде не сверяется. *Исправление:* contract-тест по расписанию или снапшоты реальных ответов.
 
@@ -722,4 +737,9 @@ RBAC-механика в рантайме пока декоративна (B11).
    офлайн-съёмка). Итог: backend **207/207** (покрытие 94/87/97/94), frontend **24/24**, оба
    линта чисты; миграции `20260724140000`/`20260724160000` обратимы; приёмка обновлена.
    4 домена — параллельными агентами, пересечений файлов нет. Коммит — за пользователем.
-6. Остальное («Важно» и «Незначительно») — фоном, по мере касания соответствующих файлов.
+6. ✅ **«Важно» ВЫПОЛНЕНО 2026-07-24.** Backend B14/B16/B19/B21, frontend F5/F6/F10/F11/F12/F14,
+   БД D4–D8, тесты T8/T9/T10 (B18 снят ещё через F13). Итог: backend **226/226** (покрытие
+   94.5/87/97.5/94.5), frontend **53/53**, оба линта 0 ошибок, миграции `20260724170000`–`173000`
+   обратимы, `schema.sql` синхронизирован. 5 доменов — параллельными агентами, пересечений нет.
+   Инфра (B20/B29/B34) отложена по решению. «Незначительно» (~36 находок) — фоном, по мере касания
+   файлов. Коммит — за пользователем.

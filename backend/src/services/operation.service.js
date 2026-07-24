@@ -73,6 +73,23 @@ export async function createOperation({
   return operation;
 }
 
+// Колонки operations, безопасно патчабельные через PATCH без побочных эффектов.
+// type/newContainerId/newStageId сюда НЕ входят — они требуют side-effects и
+// отклоняются отдельно (см. updateOperation).
+const OPERATION_UPDATE_FIELDS = {
+  notes: 'notes',
+};
+
+function buildOperationUpdate(data) {
+  const update = {};
+  for (const [key, column] of Object.entries(OPERATION_UPDATE_FIELDS)) {
+    if (data[key] !== undefined) {
+      update[column] = data[key];
+    }
+  }
+  return update;
+}
+
 export async function updateOperation({ nurseryId, plantId, id, userId, data }) {
   await requirePlantInNursery(nurseryId, plantId);
   const operation = await requireOperation(plantId, id);
@@ -80,7 +97,27 @@ export async function updateOperation({ nurseryId, plantId, id, userId, data }) 
     throw new AppError('Можно редактировать только свои операции', 403);
   }
 
-  return operationRepo.updateById(id, data);
+  // Смена type и пересадка/смена стадии требуют транзакционных побочных эффектов
+  // (контейнер/стадия растения + история) — через PATCH не поддерживаем. Раньше
+  // newContainerId/newStageId уходили прямо в UPDATE operations несуществующими
+  // колонками → SQL 500, а смена type молча не выполняла side-effects (B16).
+  if (
+    data.type !== undefined ||
+    data.newContainerId !== undefined ||
+    data.newStageId !== undefined
+  ) {
+    throw new AppError(
+      'Смена типа/пересадка/стадии через PATCH не поддерживается',
+      400
+    );
+  }
+
+  const update = buildOperationUpdate(data);
+  if (Object.keys(update).length === 0) {
+    return operation;
+  }
+
+  return operationRepo.updateById(id, update);
 }
 
 export async function softDelete({ nurseryId, plantId, id, userId, userRole }) {

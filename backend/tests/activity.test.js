@@ -74,6 +74,22 @@ describe('M13 — Лента активности', () => {
     expect(a1[0].id).not.toBe(a2[0]?.id);
   });
 
+  // B21 — пагинация журнала валидируется/зажимается: perPage ≤100, мусор → дефолт.
+  it('perPage=1000000 зажимается до 100', async () => {
+    await makePlant();
+    const res = await api().get(`${activityBase}?perPage=1000000`).set('Cookie', ctx.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.perPage).toBe(100);
+    expect((res.body.data ?? res.body).length).toBeLessThanOrEqual(100);
+  });
+
+  it('page=abc не роняет 500 (дефолт page=1)', async () => {
+    await makePlant();
+    const res = await api().get(`${activityBase}?page=abc`).set('Cookie', ctx.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.page).toBe(1);
+  });
+
   it('cleanup удаляет записи старше 2 лет', async () => {
     const [inserted] = await db('activity_logs')
       .insert({

@@ -59,6 +59,7 @@ import { useAuthStore } from '@/stores/auth.store'
 import { useNotificationsStore } from '@/stores/notifications.store'
 import { useNurseryStore } from '@/stores/nursery.store'
 import { isMobileDevice } from '@/utils/device'
+import { useConfirm } from 'primevue/useconfirm'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -68,6 +69,7 @@ const authStore = useAuthStore()
 const nurseryStore = useNurseryStore()
 const notificationsStore = useNotificationsStore()
 const router = useRouter()
+const confirm = useConfirm()
 const { processQueue } = useSyncManager()
 const isMobileClient = ref(false)
 const roleText = computed(() => authStore.roleLabels.join(', ') || authStore.roleLabel || '—')
@@ -142,7 +144,25 @@ const adminNavItems = computed(() => {
 })
 
 async function handleLogout() {
-  await authStore.logout()
+  const result = await authStore.logout()
+
+  // F5: очередь синхронизации не пуста — не стираем её молча, спрашиваем подтверждение.
+  if (result?.pending) {
+    confirm.require({
+      header: 'Есть несохранённые изменения',
+      message: 'Часть данных ещё не синхронизирована с сервером и будет потеряна при выходе. Выйти всё равно?',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Выйти и удалить',
+      rejectLabel: 'Отмена',
+      acceptClass: 'p-button-danger',
+      accept: async () => {
+        await authStore.logout({ force: true })
+        await router.push('/login')
+      }
+    })
+    return
+  }
+
   await router.push('/login')
 }
 

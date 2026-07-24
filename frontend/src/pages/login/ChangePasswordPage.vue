@@ -38,6 +38,7 @@
 
 <script setup>
 import { useAuthStore } from '@/stores/auth.store'
+import { useConfirm } from 'primevue/useconfirm'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -45,6 +46,7 @@ defineOptions({ name: 'ChangePasswordPage' })
 
 const router = useRouter()
 const authStore = useAuthStore()
+const confirm = useConfirm()
 const errorText = ref('')
 const successText = ref('')
 const currentPassword = ref('')
@@ -52,7 +54,25 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 
 async function logout() {
-  await authStore.logout()
+  const result = await authStore.logout()
+
+  // F5: не теряем несинхронизированную очередь молча — подтверждаем выход.
+  if (result?.pending) {
+    confirm.require({
+      header: 'Есть несохранённые изменения',
+      message: 'Часть данных ещё не синхронизирована с сервером и будет потеряна при выходе. Выйти всё равно?',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Выйти и удалить',
+      rejectLabel: 'Отмена',
+      acceptClass: 'p-button-danger',
+      accept: async () => {
+        await authStore.logout({ force: true })
+        await router.push('/login')
+      }
+    })
+    return
+  }
+
   await router.push('/login')
 }
 
