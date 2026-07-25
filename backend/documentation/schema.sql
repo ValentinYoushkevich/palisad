@@ -2,6 +2,9 @@
 -- Палисад — предварительная схема БД (PostgreSQL)
 -- Версия: v3
 -- Изменения v3:
+--   - экспорт (Э1): прайс-лист species_prices (цена за вид × тип контейнера,
+--     UNIQUE (nursery_id, nursery_species_id, container_type_id), CHECK price >= 0,
+--     составной FK (nursery_species_id, nursery_id) → nursery_species(id, nursery_id)) [миграция 20260726090000]
 --   - биллинг через лицензионные коды: таблицы license_codes и plan_requests,
 --     accounts.is_platform_admin BOOLEAN NOT NULL DEFAULT false          [миграция 20260725100000]
 -- Изменения v2:
@@ -524,6 +527,41 @@ CREATE TABLE notifications (
 );
 
 -- ------------------------------------------------------------
+-- Прайс-лист питомника (v3, Э1 «Экспорт», миграция 20260726090000)
+--
+-- Цена за вид × тип контейнера в пределах питомника. Один вид может иметь разные цены
+-- в разных контейнерах; тройка (nursery_id, nursery_species_id, container_type_id)
+-- уникальна — по ней идёт upsert (PUT /api/nurseries/:id/prices).
+--
+-- Тенант-изоляция на уровне БД (D2): составной FK (nursery_species_id, nursery_id) →
+-- nursery_species(id, nursery_id) физически не даёт привязать цену к виду чужого
+-- питомника. container_type_id — обычный FK: справочник контейнеров содержит системные
+-- строки (nursery_id IS NULL), общие для всех питомников, поэтому составной FK по
+-- nursery_id для него невозможен — валидность контейнера проверяется в сервисном слое (B5).
+--
+-- Экспорт CSV прайс-листа (Э2/Э3) будет гейтиться feature_export; само управление
+-- ценами (Э1) — нет (доступно на любом тарифе).
+-- ------------------------------------------------------------
+
+CREATE TABLE species_prices (
+  id                 UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
+  nursery_id         UUID          NOT NULL REFERENCES nurseries(id) ON DELETE CASCADE,
+  nursery_species_id UUID          NOT NULL,  -- FK составной (nursery_species_id, nursery_id) — см. ниже
+  container_type_id  UUID          NOT NULL REFERENCES container_types(id) ON DELETE CASCADE,
+  price              NUMERIC(10,2) NOT NULL
+                                   CONSTRAINT chk_species_prices_price CHECK (price >= 0),
+  created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  UNIQUE (nursery_id, nursery_species_id, container_type_id),
+  -- Тенант-изоляция (D2): составной FK с nursery_id — изоляция питомников на уровне БД.
+  -- Отдельный одностолбцовый FK на nursery_species_id не добавляется — составной уже
+  -- обеспечивает и существование вида, и совпадение питомника.
+  CONSTRAINT species_prices_nursery_species_id_nursery_foreign
+    FOREIGN KEY (nursery_species_id, nursery_id)
+    REFERENCES nursery_species (id, nursery_id) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
 -- Индексы
 -- ------------------------------------------------------------
 
@@ -616,6 +654,10 @@ CREATE UNIQUE INDEX uq_container_types_system_code    ON container_types(code)  
 -- email (email nullable, но идентификатор входа не должен дублироваться в питомнике).
 CREATE UNIQUE INDEX uq_tags_nursery_name   ON tags(nursery_id, name)   WHERE is_active = true;
 CREATE UNIQUE INDEX uq_users_nursery_email ON users(nursery_id, email) WHERE email IS NOT NULL;
+
+-- v3: прайс-лист питомника (Э1 «Экспорт», миграция 20260726090000)
+-- Листинг скоуплен по nursery_id; лукапы/upsert покрыты UNIQUE(nursery_id, ...).
+CREATE INDEX species_prices_nursery_id_index ON species_prices(nursery_id);
 
 -- v2: одна активная подписка на аккаунт (D12, миграция 20260724181000)
 -- (idx_subscriptions_active выше не UNIQUE и покрывает trial+active — оставлен под выборки)

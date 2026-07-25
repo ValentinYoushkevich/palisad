@@ -908,6 +908,189 @@ async function main() {
   await db('subscriptions').where({ plan_id: acceptPaidPlan.id }).del();
   await db('plans').where({ id: acceptPaidPlan.id }).del();
 
+  // ============ MODULE 19 — Экспорт (v3-04) ============
+  // Прайс-CRUD + CSV-экспорт остатков/прайс-листа. Чтобы количества сходились ТОЧНО,
+  // заводим ОТДЕЛЬНЫЙ чистый аккаунт+питомник (accE/nidE) — иначе в сводку попали бы
+  // растения модулей 9/17 из питомника A. accE на trial-подписке free-плана, поэтому
+  // feature_export управляется тем же setPlan() (free), что и раньше. Данные вставляем
+  // напрямую в БД (как в M17): 2 вида (species_catalog+nursery_species), 2 системных
+  // контейнера, дерево локаций area→section→row, 5 АКТИВНЫХ растений + 1 sold + 1 soft-
+  // deleted (обязаны быть исключены из остатков). В конце возвращаем feature_export=false.
+  // Чистится каскадом при удалении accE на следующем прогоне (email accept.% → см. чистку
+  // в начале main; nurseries→nursery_species→species_prices ON DELETE CASCADE).
+  const emailE = `accept.export.${ts}@palisad.test`;
+  const freePlanE = await db('plans').where({ slug: 'free' }).first();
+  const [accE] = await db('accounts')
+    .insert({ email: emailE, password_hash: 'x', name: 'Export Owner' }).returning('*');
+  await db('subscriptions').insert({ account_id: accE.id, plan_id: freePlanE.id, status: 'trial' });
+  const [nurseryE] = await db('nurseries')
+    .insert({ account_id: accE.id, name: 'Export Nursery' }).returning('*');
+  const nidE = nurseryE.id;
+  // Owner-сессию ФОРЖИМ (как staff-сессии в M5/M17), без реального /auth/login — иначе
+  // упёрлись бы в authLimiter (10 логинов на IP за окно; реальный вход владельца уже
+  // проверен в M2/M3). Форжённый userId не существует — requireAuth его не трогает (см. M5).
+  const jarE = forgeSession({ accountId: accE.id, userId: randomUUID(), nurseryId: nidE, role: 'owner' });
+
+  const EP = `/nurseries/${nidE}/exports`;
+  const PRP = `/nurseries/${nidE}/prices`;
+
+  // 2 вида: свежие species_catalog (уникальный gbif_usage_key на прогон) + nursery_species.
+  const eGbif1 = 1500000000 + (ts % 90000000);
+  const eGbif2 = 1600000000 + (ts % 90000000);
+  const [eScA] = await db('species_catalog')
+    .insert({ gbif_usage_key: eGbif1, scientific_name: 'Acer accepticus', source: 'gbif' }).returning('*');
+  const [eScB] = await db('species_catalog')
+    .insert({ gbif_usage_key: eGbif2, scientific_name: 'Betula accepticus', source: 'gbif' }).returning('*');
+  const [eNsA] = await db('nursery_species')
+    .insert({ nursery_id: nidE, species_catalog_id: eScA.id, display_name_ru: 'Клён Э19' }).returning('*');
+  const [eNsB] = await db('nursery_species')
+    .insert({ nursery_id: nidE, species_catalog_id: eScB.id, display_name_ru: 'Берёза Э19' }).returning('*');
+
+  // 2 системных контейнера (переиспользуем P9/C2) + системная стадия propagation.
+  const eCtP9 = await db('container_types').where({ is_system: true, code: 'P9' }).first();
+  const eCtC2 = await db('container_types').where({ is_system: true, code: 'C2' }).first();
+  const eStageProp = await db('production_stages').where({ slug: 'propagation', is_system: true }).first();
+
+  // Дерево локаций для проверки полного пути «Area / Section / Row».
+  const [eArea] = await db('locations')
+    .insert({ nursery_id: nidE, name: 'Area', type: 'area' }).returning('*');
+  const [eSection] = await db('locations')
+    .insert({ nursery_id: nidE, name: 'Section', type: 'section', parent_id: eArea.id }).returning('*');
+  const [eRow] = await db('locations')
+    .insert({ nursery_id: nidE, name: 'Row', type: 'row', parent_id: eSection.id }).returning('*');
+
+  // 5 активных растений (3×Клён/P9, 2×Берёза/C2) + 1 sold + 1 soft-deleted (исключаются).
+  const eMakePlant = (over = {}) =>
+    db('plants').insert({
+      nursery_id: nidE,
+      qr_code: `eq-${randomUUID()}`,
+      numeric_code: `en-${randomUUID()}`,
+      status: 'growing',
+      stage_id: eStageProp.id,
+      variety: 'V1',
+      location_id: eRow.id,
+      ...over,
+    });
+  for (let i = 0; i < 3; i += 1) await eMakePlant({ nursery_species_id: eNsA.id, container_id: eCtP9.id });
+  for (let i = 0; i < 2; i += 1) await eMakePlant({ nursery_species_id: eNsB.id, container_id: eCtC2.id });
+  await eMakePlant({ nursery_species_id: eNsA.id, container_id: eCtP9.id, status: 'sold' });
+  await eMakePlant({ nursery_species_id: eNsA.id, container_id: eCtP9.id, deleted_at: new Date().toISOString() });
+
+  // #3 Цены: PUT upsert (не гейтится планом) → GET отдаёт позицию с подписями и ценой.
+  const ePut = await req(jarE, 'PUT', PRP, { speciesId: eNsA.id, containerId: eCtP9.id, price: 12.5 });
+  const eGetPrices = await req(jarE, 'GET', PRP);
+  const ePriced = (eGetPrices.data?.rows ?? []).find(
+    (row) => row.nurserySpeciesId === eNsA.id && row.containerTypeId === eCtP9.id
+  );
+  check(19, 3, 'Цены: PUT upsert → GET содержит позицию с верными speciesName/containerName/price',
+    ePut.status === 200 && eGetPrices.status === 200 && !!ePriced &&
+    ePriced.speciesName === 'Клён Э19' && ePriced.containerName === eCtP9.name &&
+    Number(ePriced.price) === 12.5,
+    `put=${ePut.status}, speciesName=${ePriced?.speciesName}, container=${ePriced?.containerName}, price=${ePriced?.price}`);
+
+  // #1 Гейт feature_export: план без экспорта → оба экспорта 403.
+  await setPlan({ feature_export: false });
+  const eGateStock = await req(jarE, 'GET', `${EP}/stock`);
+  const eGatePl = await req(jarE, 'GET', `${EP}/price-list`);
+  check(19, 1, 'feature_export=false: экспорт остатков и прайс-листа → 403',
+    eGateStock.status === 403 && eGatePl.status === 403,
+    `stock=${eGateStock.status}, price-list=${eGatePl.status}`);
+
+  // #2 После включения feature_export те же эндпоинты → 200.
+  await setPlan({ feature_export: true });
+  const eStock = await req(jarE, 'GET', `${EP}/stock`);
+  const ePriceDefault = await req(jarE, 'GET', `${EP}/price-list`);
+  check(19, 2, 'feature_export=true: экспорт остатков и прайс-листа → 200',
+    eStock.status === 200 && ePriceDefault.status === 200,
+    `stock=${eStock.status}, price-list=${ePriceDefault.status}`);
+
+  // #4 Экспорт остатков[species]: total = число активных (5), строки (вид×контейнер) сходятся.
+  const eStockRowA = eStock.data?.rows?.find(
+    (row) => row.speciesName === 'Клён Э19' && row.containerName === eCtP9.name);
+  const eStockRowB = eStock.data?.rows?.find(
+    (row) => row.speciesName === 'Берёза Э19' && row.containerName === eCtC2.name);
+  check(19, 4, 'Экспорт остатков[species]: total=5 активных, строки (Клён/P9)=3 и (Берёза/C2)=2',
+    eStock.data?.total === 5 && eStockRowA?.count === 3 && eStockRowB?.count === 2,
+    `total=${eStock.data?.total}, Клён/P9=${eStockRowA?.count}, Берёза/C2=${eStockRowB?.count}`);
+
+  // #5 Проданное и soft-deleted исключены: иначе total=7, а строка P9=5 (а не 3).
+  check(19, 5, 'Проданные и мягко удалённые растения НЕ учитываются в остатках (total=5, P9=3)',
+    eStock.data?.total === 5 && eStockRowA?.count === 3,
+    `total=${eStock.data?.total} (ожид. 5, не 7), P9=${eStockRowA?.count} (ожид. 3, не 5)`);
+
+  // #6 Экспорт остатков[location]: полный путь локации «Area / Section / Row».
+  const eStockLoc = await req(jarE, 'GET', `${EP}/stock?groupBy=location`);
+  check(19, 6, 'Экспорт остатков[location]: locationPath = «Area / Section / Row», total=5',
+    eStockLoc.status === 200 && eStockLoc.data?.total === 5 &&
+    Array.isArray(eStockLoc.data?.rows) && eStockLoc.data.rows.length > 0 &&
+    eStockLoc.data.rows.every((row) => row.locationPath === 'Area / Section / Row'),
+    `total=${eStockLoc.data?.total}, path=${eStockLoc.data?.rows?.[0]?.locationPath}`);
+
+  // #7 Прайс-лист (default): только позиции С ценой (одна: Клён/P9, count=3, price=12.5), total=3.
+  const ePdRows = ePriceDefault.data?.rows ?? [];
+  const ePdA = ePdRows.find((row) => row.speciesName === 'Клён Э19');
+  check(19, 7, 'Прайс-лист (default): только позиции с ценой (Клён/P9, count=3), total=3',
+    ePdRows.length === 1 && !!ePdA && Number(ePdA.price) === 12.5 &&
+    ePdA.scientificName === 'Acer accepticus' && ePdA.containerName === eCtP9.name &&
+    ePdA.count === 3 && ePriceDefault.data?.total === 3,
+    `rows=${ePdRows.length}, price=${ePdA?.price}, total=${ePriceDefault.data?.total}`);
+
+  // #8 Прайс-лист (includeUnpriced=true): + позиция без цены (Берёза/C2, price=null), total=5.
+  const ePriceAll = await req(jarE, 'GET', `${EP}/price-list?includeUnpriced=true`);
+  const ePaRows = ePriceAll.data?.rows ?? [];
+  const ePaA = ePaRows.find((row) => row.speciesName === 'Клён Э19');
+  const ePaB = ePaRows.find((row) => row.speciesName === 'Берёза Э19');
+  check(19, 8, 'Прайс-лист (includeUnpriced): непрайсовая позиция с price=null, total=5',
+    ePriceAll.status === 200 && ePaRows.length === 2 &&
+    Number(ePaA?.price) === 12.5 && !!ePaB && ePaB.price === null && ePaB.count === 2 &&
+    ePaB.scientificName === 'Betula accepticus' && ePriceAll.data?.total === 5,
+    `rows=${ePaRows.length}, Берёза.price=${ePaB?.price}, total=${ePriceAll.data?.total}`);
+
+  // #9 CSV прайс-листа: BOM + «;» + блок-шапка «Цены в BYN» + строка «Всего» + attachment.
+  // Прямой fetch — req() не возвращает заголовок content-disposition (см. M17#7).
+  const eCsvHeaders = jarE.size ? { cookie: [...jarE].map(([k, v]) => `${k}=${v}`).join('; ') } : {};
+  const ePlCsvRes = await fetch(`${BASE}${EP}/price-list?format=csv`, { headers: eCsvHeaders });
+  const ePlCsv = Buffer.from(await ePlCsvRes.arrayBuffer()).toString('utf8');
+  check(19, 9, 'CSV прайс-листа: BOM + «;» + шапка «Цены в BYN» + строка «Всего» + attachment',
+    ePlCsvRes.status === 200 && ePlCsv.charCodeAt(0) === 0xfeff && ePlCsv.includes(';') &&
+    ePlCsv.includes('Цены в BYN') && ePlCsv.includes('Всего') &&
+    /attachment/i.test(ePlCsvRes.headers.get('content-disposition') || ''),
+    `status=${ePlCsvRes.status}, bom=${ePlCsv.charCodeAt(0) === 0xfeff}, cd=${ePlCsvRes.headers.get('content-disposition')}`);
+
+  // #10 CSV остатков: BOM + «;» + attachment.
+  const eStCsvRes = await fetch(`${BASE}${EP}/stock?format=csv`, { headers: eCsvHeaders });
+  const eStCsv = Buffer.from(await eStCsvRes.arrayBuffer()).toString('utf8');
+  check(19, 10, 'CSV остатков: BOM + «;» + attachment',
+    eStCsvRes.status === 200 && eStCsv.charCodeAt(0) === 0xfeff && eStCsv.includes(';') &&
+    /attachment/i.test(eStCsvRes.headers.get('content-disposition') || ''),
+    `status=${eStCsvRes.status}, bom=${eStCsv.charCodeAt(0) === 0xfeff}, cd=${eStCsvRes.headers.get('content-disposition')}`);
+
+  // #11/#12 RBAC: worker и observer → 403 на прайс и оба экспорта (requireRole до checkFeature).
+  // Форжим сессии для nidE (requireNurseryAccess смотрит только nurseryId в токене; requireAuth
+  // не трогает несуществующий userId — см. M5).
+  const jarEWorker = forgeSession({ accountId: accE.id, userId: randomUUID(), nurseryId: nidE, role: 'worker' });
+  const jarEObserver = forgeSession({ accountId: accE.id, userId: randomUUID(), nurseryId: nidE, role: 'observer' });
+  const eWPrices = await req(jarEWorker, 'GET', PRP);
+  const eWStock = await req(jarEWorker, 'GET', `${EP}/stock`);
+  const eWPl = await req(jarEWorker, 'GET', `${EP}/price-list`);
+  check(19, 11, 'RBAC: worker к /prices и обоим экспортам → 403',
+    eWPrices.status === 403 && eWStock.status === 403 && eWPl.status === 403,
+    `prices=${eWPrices.status}, stock=${eWStock.status}, price-list=${eWPl.status}`);
+  const eOPrices = await req(jarEObserver, 'GET', PRP);
+  const eOStock = await req(jarEObserver, 'GET', `${EP}/stock`);
+  const eOPl = await req(jarEObserver, 'GET', `${EP}/price-list`);
+  check(19, 12, 'RBAC: observer к /prices и обоим экспортам → 403',
+    eOPrices.status === 403 && eOStock.status === 403 && eOPl.status === 403,
+    `prices=${eOPrices.status}, stock=${eOStock.status}, price-list=${eOPl.status}`);
+
+  // Возврат free-плана к дефолту (feature_export=false) — как нашли до модуля.
+  await setPlan({ feature_export: false });
+
+  // Тальли модуля 19 в стиле M17 (баннер + N/N PASS).
+  const m19 = results.filter((x) => x.module === 19);
+  const m19pass = m19.filter((x) => x.pass).length;
+  console.log(`\n---------- MODULE 19 «Экспорт» ... ${m19pass}/${m19.length} ${m19pass === m19.length ? 'PASS' : 'FAIL'} ----------`);
+
   // ---------- Итог ----------
   const failed = results.filter((x) => !x.pass);
   console.log(`\n========== ИТОГО: ${results.length - failed.length}/${results.length} PASS ==========`);

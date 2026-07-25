@@ -11,6 +11,7 @@ import activityLogRouter from '@/routes/activityLog.router.js';
 import adminRouter from '@/routes/admin.router.js';
 import authRouter from '@/routes/auth.router.js';
 import dictionaryRouter from '@/routes/dictionary.router.js';
+import exportRouter from '@/routes/export.router.js';
 import healthRouter from '@/routes/health.router.js';
 import labelsRouter from '@/routes/labels.router.js';
 import locationRouter from '@/routes/location.router.js';
@@ -21,6 +22,7 @@ import operationRouter from '@/routes/operation.router.js';
 import planRequestRouter from '@/routes/planRequest.router.js';
 import plansRouter from '@/routes/plans.router.js';
 import plantRouter from '@/routes/plant.router.js';
+import priceRouter from '@/routes/price.router.js';
 import reportRouter from '@/routes/report.router.js';
 import staffRouter from '@/routes/staff.router.js';
 import subscriptionRouter from '@/routes/subscription.router.js';
@@ -54,6 +56,12 @@ app.use('/api/nurseries/:nurseryId/plants', labelsRouter);
 app.use('/api/nurseries/:nurseryId/plants/:plantId/operations', operationRouter);
 app.use('/api/nurseries/:nurseryId/plants/:plantId/movements', movementRouter);
 app.use('/api/nurseries/:nurseryId/reports', reportRouter);
+// Э1 «Экспорт»: прайс-лист питомника (CRUD цен вид × контейнер). Экспорт CSV (Э2/Э3)
+// добавится поверх и будет гейтиться feature_export; сам прайс-лист — на любом тарифе.
+app.use('/api/nurseries/:nurseryId/prices', priceRouter);
+// Э2 «Экспорт»: CSV-выгрузки питомника (сводка наличия; прайс-лист добавится в Э3).
+// Гейтится feature_export внутри сервиса — на free-тарифе оба формата отдают 403.
+app.use('/api/nurseries/:nurseryId/exports', exportRouter);
 app.use('/api/nurseries/:nurseryId/activity', activityLogRouter);
 app.use('/api/nurseries/:nurseryId/notifications', notificationRouter);
 app.use('/api/nurseries/:nurseryId', dictionaryRouter);

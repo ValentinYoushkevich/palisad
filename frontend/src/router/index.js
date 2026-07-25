@@ -135,6 +135,15 @@ const routes = [
     }
   },
   {
+    path: '/prices',
+    name: 'prices',
+    component: () => import('@/pages/prices/PricesPage.vue'),
+    meta: {
+      public: false,
+      roles: [ROLE_OWNER, ROLE_AGRONOMIST]
+    }
+  },
+  {
     path: '/admin',
     name: 'admin',
     component: () => import('@/pages/admin/AdminPage.vue'),
