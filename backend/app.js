@@ -21,6 +21,7 @@ import operationRouter from '@/routes/operation.router.js';
 import planRequestRouter from '@/routes/planRequest.router.js';
 import plansRouter from '@/routes/plans.router.js';
 import plantRouter from '@/routes/plant.router.js';
+import reportRouter from '@/routes/report.router.js';
 import staffRouter from '@/routes/staff.router.js';
 import subscriptionRouter from '@/routes/subscription.router.js';
 
@@ -52,6 +53,7 @@ app.use('/api/nurseries/:nurseryId/plants', plantRouter);
 app.use('/api/nurseries/:nurseryId/plants', labelsRouter);
 app.use('/api/nurseries/:nurseryId/plants/:plantId/operations', operationRouter);
 app.use('/api/nurseries/:nurseryId/plants/:plantId/movements', movementRouter);
+app.use('/api/nurseries/:nurseryId/reports', reportRouter);
 app.use('/api/nurseries/:nurseryId/activity', activityLogRouter);
 app.use('/api/nurseries/:nurseryId/notifications', notificationRouter);
 app.use('/api/nurseries/:nurseryId', dictionaryRouter);

@@ -3,6 +3,7 @@
 // Запуск (backend должен работать на :3100, Postgres — на :5433):
 //   cd backend && node --loader ./alias-loader.mjs scripts/acceptance-check.mjs
 import 'dotenv/config';
+import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 
 import knexFactory from 'knex';
@@ -703,6 +704,145 @@ async function main() {
 
   // Возврат free-плана к дефолтному nursery_limit
   await setPlan({ nursery_limit: 1 });
+
+  // ============ MODULE 17 — Отчёты (v3-01) ============
+  // Три read-only отчёта поверх текущей схемы. Контролируемые данные вставляем НАПРЯМУЮ в
+  // БД с датами в прошлом (окно 2026-03..06), как это делают юнит-фикстуры отчётов и вставка
+  // старого activity_log выше: отчёты становятся нетривиальными и детерминированными, а
+  // свежие данные модулей 2-16 датированы now() (вне окна) и в отчёты не попадают. Всё
+  // скоуплено по питомнику A (nid). Чистится каскадом при удалении питомника на след. прогоне
+  // (plants→movements/operations/plant_stage_history ON DELETE CASCADE; nurseries→stage_labor_norms).
+  // Проверки продолжают нумерацию модуля 17 (#1/#2 — staff-логин B11 выше) с #3.
+  const RP = `/nurseries/${nid}/reports`;
+  const RWINDOW = 'dateFrom=2026-03-01&dateTo=2026-06-30';
+  const R_BEFORE = '2026-01-01T00:00:00Z'; // до окна — «остаток на начало»
+  const R_MARCH = '2026-03-15T00:00:00Z';
+  const R_APRIL = '2026-04-10T00:00:00Z';
+  const R_MAY = '2026-05-10T00:00:00Z';
+  const R_DELETED = '2026-02-01T00:00:00Z'; // мягкое удаление до окна
+  const R_SPECIES = speciesId ?? null; // вид Acer из M8 (переиспользуем) или «Без вида»
+
+  const rWriteOffMt = await db('movement_types').where({ slug: 'write_off', is_system: true }).first();
+  const rSaleMt = await db('movement_types').where({ slug: 'sale', is_system: true }).first();
+  const rTransferMt = await db('movement_types').where({ slug: 'transfer', is_system: true }).first();
+  const rStageProp = await db('production_stages').where({ slug: 'propagation', is_system: true }).first();
+
+  const rMakePlant = async (overrides = {}) => {
+    const [plant] = await db('plants')
+      .insert({
+        nursery_id: nid,
+        qr_code: `rq-${randomUUID()}`,
+        numeric_code: `rn-${randomUUID()}`,
+        status: 'growing',
+        stage_id: rStageProp.id,
+        created_at: R_BEFORE,
+        ...overrides,
+      })
+      .returning('*');
+    return plant;
+  };
+  const rMove = (plantId, typeId, opts = {}) =>
+    db('movements').insert({
+      plant_id: plantId,
+      type_id: typeId,
+      quantity: opts.quantity ?? 1,
+      from_location_id: opts.from ?? null,
+      to_location_id: opts.to ?? null,
+      created_at: opts.at,
+    });
+
+  // Две локации — для разреза по локациям и transfersNet.
+  const [rLoc1] = await db('locations')
+    .insert({ nursery_id: nid, name: 'R-Локация 1', type: 'section' }).returning('*');
+  const [rLoc2] = await db('locations')
+    .insert({ nursery_id: nid, name: 'R-Локация 2', type: 'section' }).returning('*');
+
+  // Растения с контролируемой историей (окно 2026-03..06).
+  const rpA = await rMakePlant({ location_id: rLoc1.id, nursery_species_id: R_SPECIES }); // остаётся
+  const rpB = await rMakePlant({ location_id: rLoc2.id, nursery_species_id: R_SPECIES }); // перемещён loc1→loc2
+  await rMove(rpB.id, rTransferMt.id, { at: R_APRIL, from: rLoc1.id, to: rLoc2.id });
+  const rpC = await rMakePlant({ location_id: rLoc1.id, nursery_species_id: R_SPECIES }); // продан
+  await rMove(rpC.id, rSaleMt.id, { at: R_APRIL });
+  const rpD = await rMakePlant({ location_id: rLoc2.id, nursery_species_id: null }); // списан (май)
+  await rMove(rpD.id, rWriteOffMt.id, { at: R_MAY });
+  const rpWO = await rMakePlant({ location_id: rLoc1.id, nursery_species_id: R_SPECIES }); // списан (март)
+  await rMove(rpWO.id, rWriteOffMt.id, { at: R_MARCH });
+  await rMakePlant({ location_id: rLoc2.id, nursery_species_id: null, created_at: R_MARCH }); // приход
+  await rMakePlant({ location_id: rLoc1.id, nursery_species_id: R_SPECIES, deleted_at: R_DELETED }); // удалён до окна
+  await rMakePlant({ location_id: null, nursery_species_id: null, created_at: R_MARCH }); // приход «без локации/вида»
+
+  // Трудозатраты: нормы на стадии propagation + 3 операции (pruning/treatment с нормой,
+  // inspection — без нормы). Растение без истории стадий → берётся текущая стадия (propagation).
+  await db('stage_labor_norms').insert([
+    { nursery_id: nid, stage_id: rStageProp.id, operation_type: 'pruning', norm_minutes: 30 },
+    { nursery_id: nid, stage_id: rStageProp.id, operation_type: 'treatment', norm_minutes: 15 },
+  ]);
+  const rpLabor = await rMakePlant({ location_id: rLoc1.id, nursery_species_id: R_SPECIES });
+  await db('operations').insert([
+    { plant_id: rpLabor.id, type: 'pruning', created_at: R_MARCH }, // → 30
+    { plant_id: rpLabor.id, type: 'treatment', created_at: R_MARCH }, // → 15
+    { plant_id: rpLabor.id, type: 'inspection', created_at: R_MARCH }, // нормы нет → operationsWithoutNorm
+  ]);
+  const R_EXPECTED_OPS = 3;
+  const R_EXPECTED_MINUTES = 45; // 30 + 15 (inspection = 0)
+
+  // #3 write-offs: total>0, строки непустые, доли в [0,1], rate конечен.
+  const rWo = await req(jarA, 'GET', `${RP}/write-offs?${RWINDOW}`);
+  check(17, 3, 'write-offs: totalWrittenOff>0, строки непустые, share∈[0,1], rate конечен',
+    rWo.status === 200 && rWo.data?.totalWrittenOff > 0 &&
+    Array.isArray(rWo.data?.rows) && rWo.data.rows.length > 0 &&
+    rWo.data.rows.every((row) => row.share >= 0 && row.share <= 1) &&
+    Number.isFinite(rWo.data?.rate),
+    `total=${rWo.data?.totalWrittenOff}, rows=${rWo.data?.rows?.length}, rate=${rWo.data?.rate}`);
+
+  // Балансовая идентичность: closing = opening + inflow − sold − writtenOff + transfersNet.
+  const rIdentity = (row) =>
+    row.closing === row.opening + row.inflow - row.sold - row.writtenOff + row.transfersNet;
+
+  // #4 stock-flow[location]: инвариант по всем строкам и totals + transfersNet задействован.
+  const rSfLoc = await req(jarA, 'GET', `${RP}/stock-flow?${RWINDOW}&groupBy=location`);
+  check(17, 4, 'stock-flow[location]: closing=opening+inflow−sold−writtenOff+transfersNet (строки+totals), transfersNet≠0',
+    rSfLoc.status === 200 && Array.isArray(rSfLoc.data?.rows) && rSfLoc.data.rows.length > 0 &&
+    rSfLoc.data.rows.every(rIdentity) && rIdentity(rSfLoc.data.totals) &&
+    rSfLoc.data.rows.some((row) => row.transfersNet !== 0),
+    `rows=${rSfLoc.data?.rows?.length}, totals.closing=${rSfLoc.data?.totals?.closing}`);
+
+  // #5 stock-flow[species]: тот же инвариант по строкам и totals.
+  const rSfSpc = await req(jarA, 'GET', `${RP}/stock-flow?${RWINDOW}&groupBy=species`);
+  check(17, 5, 'stock-flow[species]: инвариант closing по всем строкам и totals',
+    rSfSpc.status === 200 && Array.isArray(rSfSpc.data?.rows) && rSfSpc.data.rows.length > 0 &&
+    rSfSpc.data.rows.every(rIdentity) && rIdentity(rSfSpc.data.totals),
+    `rows=${rSfSpc.data?.rows?.length}, totals.closing=${rSfSpc.data?.totals?.closing}`);
+
+  // #6 labor-cost: operationsCount, operationsWithoutNorm≥1, totalMinutes и Σ(row.minutes).
+  const rLc = await req(jarA, 'GET', `${RP}/labor-cost?${RWINDOW}`);
+  const rLcSum = Array.isArray(rLc.data?.rows)
+    ? rLc.data.rows.reduce((acc, row) => acc + row.minutes, 0) : NaN;
+  check(17, 6, 'labor-cost: operationsCount/operationsWithoutNorm/totalMinutes и Σ(minutes) сходятся',
+    rLc.status === 200 && rLc.data?.operationsCount === R_EXPECTED_OPS &&
+    rLc.data?.operationsWithoutNorm >= 1 && rLc.data?.totalMinutes === R_EXPECTED_MINUTES &&
+    rLcSum === rLc.data?.totalMinutes,
+    `ops=${rLc.data?.operationsCount}, noNorm=${rLc.data?.operationsWithoutNorm}, total=${rLc.data?.totalMinutes}, Σ=${rLcSum}`);
+
+  // #7 CSV: 200 + text/csv + BOM + разделитель «;» + Content-Disposition: attachment.
+  // Прямой fetch — req() не возвращает заголовок content-disposition.
+  const rCsvHeaders = jarA.size ? { cookie: [...jarA].map(([k, v]) => `${k}=${v}`).join('; ') } : {};
+  const rCsvRes = await fetch(`${BASE}${RP}/write-offs?${RWINDOW}&groupBy=month&format=csv`, { headers: rCsvHeaders });
+  const rCsvText = Buffer.from(await rCsvRes.arrayBuffer()).toString('utf8');
+  check(17, 7, 'CSV: 200 + text/csv + BOM + разделитель «;» + attachment',
+    rCsvRes.status === 200 &&
+    /text\/csv/.test(rCsvRes.headers.get('content-type') || '') &&
+    rCsvText.charCodeAt(0) === 0xfeff &&
+    rCsvText.includes(';') &&
+    /attachment/i.test(rCsvRes.headers.get('content-disposition') || ''),
+    `status=${rCsvRes.status}, ct=${rCsvRes.headers.get('content-type')}, bom=${rCsvText.charCodeAt(0) === 0xfeff}`);
+
+  // #8 RBAC: worker/observer к отчётам → 403 (STRUCTURE_ROLES only).
+  const rRbacW = await req(jarWorker, 'GET', `${RP}/write-offs?${RWINDOW}`);
+  const rRbacO = await req(jarObserver, 'GET', `${RP}/stock-flow?${RWINDOW}`);
+  check(17, 8, 'RBAC: worker и observer к отчётам → 403',
+    rRbacW.status === 403 && rRbacO.status === 403,
+    `worker=${rRbacW.status}, observer=${rRbacO.status}`);
 
   // ============ MODULE 18 — Биллинг (лицензионные коды) ============
   // Платный план под активацию кодом (чистится в конце блока). accA становится

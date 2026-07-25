@@ -16,6 +16,7 @@ import { isMobileDevice } from '@/utils/device'
 import { createRouter, createWebHistory } from 'vue-router'
 
 const ROLE_OWNER = 'owner'
+const ROLE_AGRONOMIST = 'agronomist'
 
 const routes = [
   {
@@ -122,6 +123,15 @@ const routes = [
     meta: {
       public: false,
       roles: [ROLE_OWNER]
+    }
+  },
+  {
+    path: '/reports',
+    name: 'reports',
+    component: () => import('@/pages/reports/ReportsPage.vue'),
+    meta: {
+      public: false,
+      roles: [ROLE_OWNER, ROLE_AGRONOMIST]
     }
   },
   {

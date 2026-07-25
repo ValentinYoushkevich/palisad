@@ -17,6 +17,7 @@
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "axios": "^1.9.0",
+    "chart.js": "^4.5.1",
     "dexie": "^4.4.2",
     "pdf-lib": "^1.17.1",
     "pinia": "^2.3.1",

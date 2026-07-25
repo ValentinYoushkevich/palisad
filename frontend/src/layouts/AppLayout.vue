@@ -131,6 +131,11 @@ const adminNavItems = computed(() => {
       visible: authStore.canManageStructure
     },
     {
+      to: '/reports',
+      label: 'Отчёты',
+      visible: authStore.canManageStructure
+    },
+    {
       to: '/nursery/settings',
       label: 'Питомник',
       visible: authStore.isAuthenticated && Boolean(nurseryStore.nursery)
