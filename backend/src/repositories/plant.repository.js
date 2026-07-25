@@ -96,6 +96,15 @@ export function findByNurseryAndId(nurseryId, id) {
   return db('plants').where({ nursery_id: nurseryId, id }).whereNull('deleted_at').first();
 }
 
+// Блокирующая перезагрузка растения в пределах питомника (SELECT ... FOR UPDATE).
+// В отличие от findByNurseryAndId НЕ фильтрует по deleted_at — вызывающему нужно
+// отличить «удалено» от «нет вовсе»; строка держится под замком до конца транзакции,
+// сериализуя применение расхождений инвентаризации с параллельными движениями по тому
+// же растению (TOCTOU по status/location_id). Требует executor=trx.
+export function findByNurseryAndIdForUpdate(nurseryId, id, executor = db) {
+  return executor('plants').where({ nursery_id: nurseryId, id }).forUpdate().first();
+}
+
 // Батч-выборка по списку id (один запрос вместо N — для генерации этикеток).
 export function findByNurseryAndIds(nurseryId, ids) {
   return db('plants')

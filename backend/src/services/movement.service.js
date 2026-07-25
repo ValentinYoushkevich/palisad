@@ -8,7 +8,10 @@ import * as plantRepo from '@/repositories/plant.repository.js';
 import { AppError } from '@/utils/AppError.js';
 import { logActivity } from '@/utils/logActivity.js';
 
-const CLOSED_STATUSES = ['sold', 'written_off'];
+// Статусы «закрытого» растения — к нему нельзя добавлять движения (продано/списано).
+// Экспортируется для переиспользования той же бизнес-инварианты применением
+// инвентаризации (Э3), чтобы не дублировать список статусов по слоям.
+export const CLOSED_STATUSES = ['sold', 'written_off'];
 const EVENT_BY_MOVEMENT_SLUG = {
   arrival: EVENT_TYPES.MOVEMENT_ARRIVAL,
   sale: EVENT_TYPES.MOVEMENT_SALE,

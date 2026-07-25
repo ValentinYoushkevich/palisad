@@ -2,6 +2,10 @@
 -- Палисад — предварительная схема БД (PostgreSQL)
 -- Версия: v3
 -- Изменения v3:
+--   - инвентаризация (Э1): сессии сканирования зоны inventory_sessions + построчная сверка
+--     inventory_items (категории matched/missing/foreign/unknown, CHECK через knex.raw),
+--     составной FK (location_id, nursery_id) → locations(id, nursery_id), частичный UNIQUE
+--     (nursery_id, client_request_id) идемпотентности офлайн-очереди       [миграция 20260728100000]
 --   - экспорт (Э1): прайс-лист species_prices (цена за вид × тип контейнера,
 --     UNIQUE (nursery_id, nursery_species_id, container_type_id), CHECK price >= 0,
 --     составной FK (nursery_species_id, nursery_id) → nursery_species(id, nursery_id)) [миграция 20260726090000]
@@ -562,6 +566,57 @@ CREATE TABLE species_prices (
 );
 
 -- ------------------------------------------------------------
+-- Инвентаризация сканированием (v3, Э1 «Инвентаризация», миграция 20260728100000)
+--
+-- inventory_sessions — сессия сканирования зоны: пользователь выбирает корневую локацию
+-- (location_id), сканирует коды растений её поддерева и фиксирует результат сверки.
+-- started_at/completed_at приходят с устройства (офлайн-сборка). Счётчики
+-- matched/missing/foreign/unknown денормализованы на сессии (для листинга истории).
+--
+-- inventory_items — построчный результат сверки: matched (в зоне), missing (числится в
+-- зоне, но не отсканировано), foreign (отсканировано, но чужая зона), unknown (кода нет
+-- среди активных растений). applied_movement_id — аудит применения расхождений (поздние стадии).
+--
+-- Тенант-изоляция (D2): составной FK (location_id, nursery_id) → locations(id, nursery_id),
+-- плоский (без каскада) — сессия является историческим снимком. Идемпотентность (F2):
+-- частичный UNIQUE (nursery_id, client_request_id) — скоуплен по питомнику.
+-- ------------------------------------------------------------
+
+CREATE TABLE inventory_sessions (
+  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  nursery_id        UUID        NOT NULL REFERENCES nurseries(id) ON DELETE CASCADE,
+  location_id       UUID        NOT NULL,  -- корень зоны; FK составной (location_id, nursery_id) — см. ниже
+  user_id           UUID        REFERENCES users(id) ON DELETE SET NULL,
+  started_at        TIMESTAMPTZ NOT NULL,
+  completed_at      TIMESTAMPTZ NOT NULL,
+  client_request_id UUID,       -- идемпотентность офлайн-очереди (F2); UNIQUE-индекс ниже
+  matched_count     INTEGER     NOT NULL DEFAULT 0,
+  missing_count     INTEGER     NOT NULL DEFAULT 0,
+  foreign_count     INTEGER     NOT NULL DEFAULT 0,
+  unknown_count     INTEGER     NOT NULL DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Тенант-изоляция (D2): составной FK с nursery_id — сессия не может ссылаться на
+  -- локацию чужого питомника. Плоский FK (сессия — исторический снимок).
+  CONSTRAINT inventory_sessions_location_id_nursery_foreign
+    FOREIGN KEY (location_id, nursery_id)
+    REFERENCES locations (id, nursery_id)
+);
+
+CREATE TABLE inventory_items (
+  id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id          UUID        NOT NULL REFERENCES inventory_sessions(id) ON DELETE CASCADE,
+  plant_id            UUID        REFERENCES plants(id) ON DELETE SET NULL,  -- NULL для unknown
+  raw_code            TEXT,       -- отсканированная строка; NULL для missing
+  category            TEXT        NOT NULL
+                                  CONSTRAINT chk_inventory_items_category
+                                  CHECK (category IN ('matched', 'missing', 'foreign', 'unknown')),
+  scanned_at          TIMESTAMPTZ,  -- NULL для missing
+  applied_movement_id UUID        REFERENCES movements(id) ON DELETE SET NULL,  -- аудит применения
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ------------------------------------------------------------
 -- Индексы
 -- ------------------------------------------------------------
 
@@ -658,6 +713,14 @@ CREATE UNIQUE INDEX uq_users_nursery_email ON users(nursery_id, email) WHERE ema
 -- v3: прайс-лист питомника (Э1 «Экспорт», миграция 20260726090000)
 -- Листинг скоуплен по nursery_id; лукапы/upsert покрыты UNIQUE(nursery_id, ...).
 CREATE INDEX species_prices_nursery_id_index ON species_prices(nursery_id);
+
+-- v3: инвентаризация (Э1 «Инвентаризация», миграция 20260728100000)
+-- Индекс под пагинированный листинг истории сессий (ORDER BY completed_at DESC по питомнику);
+-- частичный UNIQUE — идемпотентность офлайн-очереди (F2), скоуплен по питомнику;
+-- индекс (session_id, category) — под выборку строк сверки сессии с фильтром по категории.
+CREATE INDEX inventory_sessions_nursery_id_completed_at_index ON inventory_sessions(nursery_id, completed_at);
+CREATE UNIQUE INDEX uq_inventory_sessions_client_request ON inventory_sessions(nursery_id, client_request_id) WHERE client_request_id IS NOT NULL;
+CREATE INDEX inventory_items_session_id_category_index ON inventory_items(session_id, category);
 
 -- v2: одна активная подписка на аккаунт (D12, миграция 20260724181000)
 -- (idx_subscriptions_active выше не UNIQUE и покрывает trial+active — оставлен под выборки)

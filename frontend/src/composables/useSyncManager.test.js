@@ -22,6 +22,7 @@ async function resetTables() {
   await db.table('pending_photos').clear()
   await db.operations.clear()
   await db.movements.clear()
+  await db.table('inventory_sessions_local').clear()
 }
 
 // Blob не переживает structuredClone в fake-indexeddb+jsdom (см. useSyncManager.photo.test.js),
@@ -44,6 +45,31 @@ function queueCreateOperation(overrides = {}) {
     localId: 'local_1',
     clientRequestId: 'uuid-1',
     type: 'note',
+    ...overrides
+  })
+}
+
+function seedInventorySession() {
+  return db.table('inventory_sessions_local').add({
+    nurseryId: 'n1',
+    locationId: 'zone',
+    startedAt: '2024-01-01T00:00:00Z',
+    completedAt: '2024-01-01T01:00:00Z',
+    clientRequestId: 'inv-uuid-1',
+    status: 'completed',
+    scans: [{ code: 'QR1', scannedAt: '2024-01-01T00:30:00Z' }]
+  })
+}
+
+function queueCreateInventorySession(localId, overrides = {}) {
+  return addToQueue('create_inventory_session', {
+    nurseryId: 'n1',
+    localId,
+    locationId: 'zone',
+    startedAt: '2024-01-01T00:00:00Z',
+    completedAt: '2024-01-01T01:00:00Z',
+    clientRequestId: 'inv-uuid-1',
+    scans: [{ code: 'QR1', scannedAt: '2024-01-01T00:30:00Z' }],
     ...overrides
   })
 }
@@ -183,5 +209,38 @@ describe('useSyncManager', () => {
     expect(queue).toHaveLength(1)
     expect(queue[0].retries).toBe(0)
     expect((await db.table('pending_photos').get(localId)).status).toBe('pending')
+  })
+
+  it('ФЭ5: create_inventory_session (200) отправляет сессию, удаляет локальную запись и закрывает элемент', async () => {
+    http.post.mockResolvedValue({ status: 200, data: { id: 'srv_sess_1' } })
+    const localId = await seedInventorySession()
+    await queueCreateInventorySession(localId)
+
+    const { processQueue } = useSyncManager()
+    await processQueue()
+
+    expect(http.post).toHaveBeenCalledWith(
+      '/nurseries/n1/inventory-sessions',
+      expect.objectContaining({
+        clientRequestId: 'inv-uuid-1',
+        scans: [{ code: 'QR1', scannedAt: '2024-01-01T00:30:00Z' }]
+      })
+    )
+    expect(await db.table('inventory_sessions_local').get(localId)).toBeUndefined()
+    expect(await getPending()).toHaveLength(0)
+    expect(await getFailedCount()).toBe(0)
+  })
+
+  it('ФЭ5: create_inventory_session (409) трактуется как успех — локальная запись удалена, без ретраев', async () => {
+    http.post.mockRejectedValue({ response: { status: 409 } })
+    const localId = await seedInventorySession()
+    await queueCreateInventorySession(localId)
+
+    const { processQueue } = useSyncManager()
+    await processQueue()
+
+    expect(await db.table('inventory_sessions_local').get(localId)).toBeUndefined()
+    expect(await getPending()).toHaveLength(0)
+    expect(await getFailedCount()).toBe(0)
   })
 })

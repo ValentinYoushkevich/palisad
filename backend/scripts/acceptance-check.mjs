@@ -1091,6 +1091,212 @@ async function main() {
   const m19pass = m19.filter((x) => x.pass).length;
   console.log(`\n---------- MODULE 19 «Экспорт» ... ${m19pass}/${m19.length} ${m19pass === m19.length ? 'PASS' : 'FAIL'} ----------`);
 
+  // ============ MODULE 20 — Инвентаризация (v3-03) ============
+  // Сессия сканирования зоны: сервер сверяет сканы с активными растениями ПОДДЕРЕВА зоны и
+  // раскладывает расхождения по категориям (matched/missing/foreign/unknown), затем «применяет»
+  // их движениями (списание missing / перемещение foreign в корень зоны). Фикстуру строим в
+  // питомнике A (nid) на СВЕЖЕМ поддереве локаций + собственных растениях — так счётчики
+  // детерминированы (в зону попадают ТОЛЬКО наши растения, сканируем только их коды + один
+  // неизвестный), а применение выполняется РЕАЛЬНЫМИ сессиями jarWorker/jarA: apply создаёт
+  // movements с user_id = субъект сессии, а у форжённых сессий (M19) userId несуществующий и
+  // FK movements.user_id упал бы. Данные вставляем напрямую в БД (как M17/M19). В КОНЦЕ удаляем
+  // свои inventory_sessions: FK inventory_sessions.location_id → locations БЕЗ ON DELETE, иначе
+  // чистка локаций питомника A на следующем прогоне упёрлась бы в ссылку сессии (каскад по
+  // nursery_id срабатывает позже, на удалении самого питомника).
+  const IV = `${P}/inventory-sessions`;
+  const ivWriteOffMt = await db('movement_types').where({ slug: 'write_off', is_system: true }).first();
+
+  // Локация-инсертер (возвращает вставленную строку) и растение-инсертер (активное growing,
+  // уникальные qr/numeric; локация — из overrides). Минимальный набор колонок — как в
+  // tests/inventory-apply.js: stage/species/container для сверки не нужны (левые джойны null-safe).
+  const ivMakeLocation = async (name, type, parentId = null) => {
+    const [loc] = await db('locations')
+      .insert({ nursery_id: nid, name, type, parent_id: parentId })
+      .returning('*');
+    return loc;
+  };
+  const ivMakePlant = async (over = {}) => {
+    const [plant] = await db('plants')
+      .insert({
+        nursery_id: nid,
+        qr_code: `ivq-${randomUUID()}`,
+        numeric_code: `ivn-${randomUUID()}`,
+        status: 'growing',
+        ...over,
+      })
+      .returning('*');
+    return plant;
+  };
+
+  // Дерево зоны: area → section(ЗОНА) → row(в зоне) + вторая section ВНЕ зоны.
+  const ivArea = await ivMakeLocation('И-Участок', 'area');
+  const ivZone = await ivMakeLocation('И-Секция (зона)', 'section', ivArea.id);
+  const ivRow = await ivMakeLocation('И-Ряд', 'row', ivZone.id);
+  const ivOther = await ivMakeLocation('И-Секция вне зоны', 'section', ivArea.id);
+
+  // Растения: P1/P2 — в самой зоне, P3 — в ряду (поддерево зоны), P_FOREIGN — вне зоны.
+  // ivUnknownCode — код, которого нет ни у одного растения питомника.
+  const ivP1 = await ivMakePlant({ location_id: ivZone.id });
+  const ivP2 = await ivMakePlant({ location_id: ivZone.id });
+  const ivP3 = await ivMakePlant({ location_id: ivRow.id });
+  const ivForeign = await ivMakePlant({ location_id: ivOther.id });
+  const ivUnknownCode = `ivu-${randomUUID()}`;
+
+  const ivSessionBody = {
+    locationId: ivZone.id,
+    startedAt: '2026-07-25T10:00:00.000Z',
+    completedAt: '2026-07-25T10:05:00.000Z',
+    clientRequestId: randomUUID(),
+    scans: [
+      { code: ivP1.qr_code, scannedAt: '2026-07-25T10:01:00.000Z' },
+      { code: ivP3.numeric_code, scannedAt: '2026-07-25T10:02:00.000Z' }, // скан по ЧИСЛОВОМУ коду
+      { code: ivForeign.qr_code, scannedAt: '2026-07-25T10:03:00.000Z' },
+      { code: ivUnknownCode, scannedAt: '2026-07-25T10:04:00.000Z' },
+    ],
+  };
+
+  // #1 POST сессии (worker) → 201 + счётчики: matched=2 (P1,P3), missing=1 (P2), foreign=1
+  // (P_FOREIGN), unknown=1. Скан P3 по numeric_code — сверка ловит qr_code ИЛИ numeric_code.
+  const ivCreate = await req(jarWorker, 'POST', IV, ivSessionBody);
+  const ivSessionId = ivCreate.data?.id;
+  check(20, 1, 'POST сессии (worker) → 201; counts matched=2/missing=1/foreign=1/unknown=1',
+    ivCreate.status === 201 && ivCreate.data?.counts?.matched === 2 &&
+    ivCreate.data?.counts?.missing === 1 && ivCreate.data?.counts?.foreign === 1 &&
+    ivCreate.data?.counts?.unknown === 1,
+    `status=${ivCreate.status}, counts=${JSON.stringify(ivCreate.data?.counts)}`);
+
+  // #2 Идемпотентный повтор с ТЕМ ЖЕ clientRequestId → 200, ТА ЖЕ сессия, история не выросла.
+  const ivListBefore = await req(jarWorker, 'GET', IV);
+  const ivReplay = await req(jarWorker, 'POST', IV, ivSessionBody);
+  const ivListAfter = await req(jarWorker, 'GET', IV);
+  check(20, 2, 'Идемпотентный replay (тот же clientRequestId) → 200, тот же id, total не вырос',
+    ivReplay.status === 200 && !!ivSessionId && ivReplay.data?.id === ivSessionId &&
+    ivListAfter.data?.total === ivListBefore.data?.total,
+    `status=${ivReplay.status}, sameId=${ivReplay.data?.id === ivSessionId}, total ${ivListBefore.data?.total}->${ivListAfter.data?.total}`);
+
+  // #3 DETAIL (observer читает): missing⊇P2, foreign⊇P_FOREIGN, unknown⊇сырой код; matched
+  // массивом НЕ отдаётся, но counts.matched=2.
+  const ivDetail = await req(jarObserver, 'GET', `${IV}/${ivSessionId}`);
+  const ivMissingHasP2 = (ivDetail.data?.items?.missing ?? []).some((it) => it.plantId === ivP2.id);
+  const ivForeignHasPF = (ivDetail.data?.items?.foreign ?? []).some((it) => it.plantId === ivForeign.id);
+  const ivUnknownHasCode = (ivDetail.data?.items?.unknown ?? []).some((it) => it.rawCode === ivUnknownCode);
+  check(20, 3, 'DETAIL: missing⊇P2, foreign⊇P_FOREIGN, unknown⊇сырой код; counts.matched=2, matched-массива нет',
+    ivDetail.status === 200 && ivMissingHasP2 && ivForeignHasPF && ivUnknownHasCode &&
+    ivDetail.data?.counts?.matched === 2 && ivDetail.data?.items?.matched === undefined,
+    `missingP2=${ivMissingHasP2}, foreignPF=${ivForeignHasPF}, unknown=${ivUnknownHasCode}, matched=${ivDetail.data?.counts?.matched}`);
+
+  // #4 LIST: сессия в истории со своими счётчиками + поля пагинации (page/perPage/total).
+  const ivListRow = (ivListAfter.data?.rows ?? []).find((row) => row.id === ivSessionId);
+  check(20, 4, 'LIST: сессия в истории со счётчиками + поля пагинации (page/perPage/total)',
+    ivListAfter.status === 200 && !!ivListRow &&
+    ivListRow.counts?.matched === 2 && ivListRow.counts?.missing === 1 &&
+    ivListRow.counts?.foreign === 1 && ivListRow.counts?.unknown === 1 &&
+    typeof ivListAfter.data?.page === 'number' && typeof ivListAfter.data?.perPage === 'number' &&
+    typeof ivListAfter.data?.total === 'number',
+    `found=${!!ivListRow}, page=${ivListAfter.data?.page}, perPage=${ivListAfter.data?.perPage}, total=${ivListAfter.data?.total}`);
+
+  // #5 Применение (owner): списать P2 + вернуть P_FOREIGN → applied {1,1}, skipped пуст.
+  const ivApplyBody = {
+    writeOff: { plantIds: [ivP2.id], movementTypeId: ivWriteOffMt.id },
+    transfer: { plantIds: [ivForeign.id] },
+  };
+  const ivApply = await req(jarA, 'POST', `${IV}/${ivSessionId}/apply`, ivApplyBody);
+  check(20, 5, 'Apply (owner): writeOff P2 + transfer P_FOREIGN → applied {1,1}, skipped=[]',
+    ivApply.status === 200 && ivApply.data?.applied?.writtenOff === 1 &&
+    ivApply.data?.applied?.transferred === 1 &&
+    Array.isArray(ivApply.data?.skipped) && ivApply.data.skipped.length === 0,
+    `status=${ivApply.status}, applied=${JSON.stringify(ivApply.data?.applied)}, skipped=${ivApply.data?.skipped?.length}`);
+
+  // #6 Эффект применения: P2 → written_off; P_FOREIGN.location_id → корень зоны (ivZone).
+  const ivP2Db = await db('plants').where({ id: ivP2.id }).first();
+  const ivForeignDb = await db('plants').where({ id: ivForeign.id }).first();
+  check(20, 6, 'Эффект: P2 status=written_off, P_FOREIGN.location_id=зона сессии',
+    ivP2Db?.status === 'written_off' && ivForeignDb?.location_id === ivZone.id,
+    `P2=${ivP2Db?.status}, foreignLoc=${ivForeignDb?.location_id === ivZone.id}`);
+
+  // #7 DETAIL после apply: у missing(P2) и foreign(P_FOREIGN) проставлен appliedMovementId.
+  const ivDetail2 = await req(jarA, 'GET', `${IV}/${ivSessionId}`);
+  const ivP2Item = (ivDetail2.data?.items?.missing ?? []).find((it) => it.plantId === ivP2.id);
+  const ivPFItem = (ivDetail2.data?.items?.foreign ?? []).find((it) => it.plantId === ivForeign.id);
+  check(20, 7, 'DETAIL после apply: appliedMovementId != null у P2 (missing) и P_FOREIGN (foreign)',
+    ivDetail2.status === 200 && !!ivP2Item?.appliedMovementId && !!ivPFItem?.appliedMovementId,
+    `P2.applied=${ivP2Item?.appliedMovementId != null}, PF.applied=${ivPFItem?.appliedMovementId != null}`);
+
+  // #8 Идемпотентное применение: повтор ТОГО ЖЕ тела → applied {0,0}, все skipped=already_applied,
+  // новых движений ноль (считаем движения P2/P_FOREIGN до и после).
+  const ivMvBefore = await db('movements').whereIn('plant_id', [ivP2.id, ivForeign.id])
+    .count('id as c').then((x) => Number(x[0].c));
+  const ivApply2 = await req(jarA, 'POST', `${IV}/${ivSessionId}/apply`, ivApplyBody);
+  const ivMvAfter = await db('movements').whereIn('plant_id', [ivP2.id, ivForeign.id])
+    .count('id as c').then((x) => Number(x[0].c));
+  check(20, 8, 'Повтор apply → applied {0,0}, все skipped=already_applied, 0 новых движений',
+    ivApply2.status === 200 && ivApply2.data?.applied?.writtenOff === 0 &&
+    ivApply2.data?.applied?.transferred === 0 &&
+    Array.isArray(ivApply2.data?.skipped) && ivApply2.data.skipped.length === 2 &&
+    ivApply2.data.skipped.every((s) => s.reason === 'already_applied') && ivMvAfter === ivMvBefore,
+    `applied=${JSON.stringify(ivApply2.data?.applied)}, reasons=${JSON.stringify(ivApply2.data?.skipped?.map((s) => s.reason))}, mv ${ivMvBefore}->${ivMvAfter}`);
+
+  // #9 Гонка: СВЕЖАЯ зона+растение, два параллельных apply одного тела → ровно ОДНО движение,
+  // суммарный writtenOff=1 (advisory-lock сессии + FOR UPDATE + маркер applied_movement_id).
+  const ivRaceZone = await ivMakeLocation('И-Гонка (зона)', 'section', ivArea.id);
+  const ivRacePlant = await ivMakePlant({ location_id: ivRaceZone.id });
+  const ivRaceCreate = await req(jarWorker, 'POST', IV, {
+    locationId: ivRaceZone.id,
+    startedAt: '2026-07-25T11:00:00.000Z',
+    completedAt: '2026-07-25T11:05:00.000Z',
+    clientRequestId: randomUUID(),
+    scans: [],
+  });
+  const ivRaceSessionId = ivRaceCreate.data?.id;
+  const ivRaceBody = { writeOff: { plantIds: [ivRacePlant.id], movementTypeId: ivWriteOffMt.id } };
+  const [ivRace1, ivRace2] = await Promise.all([
+    req(jarA, 'POST', `${IV}/${ivRaceSessionId}/apply`, ivRaceBody),
+    req(jarA, 'POST', `${IV}/${ivRaceSessionId}/apply`, ivRaceBody),
+  ]);
+  const ivRaceMv = await db('movements').where({ plant_id: ivRacePlant.id })
+    .count('id as c').then((x) => Number(x[0].c));
+  const ivRaceWO = (ivRace1.data?.applied?.writtenOff ?? 0) + (ivRace2.data?.applied?.writtenOff ?? 0);
+  check(20, 9, 'Гонка: два параллельных apply → ровно 1 движение, суммарный writtenOff=1',
+    ivRace1.status === 200 && ivRace2.status === 200 && ivRaceMv === 1 && ivRaceWO === 1,
+    `mv=${ivRaceMv}, writtenOffSum=${ivRaceWO}, statuses=${ivRace1.status}/${ivRace2.status}`);
+
+  // #10 PDF-акт: 200 + application/pdf + тело начинается с %PDF + встроен кириллический DejaVuSans.
+  const ivAct = await req(jarA, 'GET', `${IV}/${ivSessionId}/act`, undefined, { raw: true });
+  const ivActBody = ivAct.data;
+  const ivActPdf = Buffer.isBuffer(ivActBody) && ivActBody.subarray(0, 4).toString() === '%PDF';
+  check(20, 10, 'PDF-акт: 200 + application/pdf + %PDF + встроен шрифт DejaVuSans',
+    ivAct.status === 200 && /application\/pdf/.test(ivAct.contentType || '') && ivActPdf &&
+    ivActBody.toString('latin1').includes('DejaVuSans'),
+    `status=${ivAct.status}, ct=${ivAct.contentType}, pdf=${ivActPdf}`);
+
+  // #11 RBAC: worker apply → 403; observer POST сессии → 403; observer GET деталей → 200.
+  const ivWorkerApply = await req(jarWorker, 'POST', `${IV}/${ivSessionId}/apply`, {});
+  const ivObserverPost = await req(jarObserver, 'POST', IV, {
+    locationId: ivZone.id, startedAt: '2026-07-25T10:00:00.000Z',
+    completedAt: '2026-07-25T10:05:00.000Z', clientRequestId: randomUUID(), scans: [],
+  });
+  const ivObserverGet = await req(jarObserver, 'GET', `${IV}/${ivSessionId}`);
+  check(20, 11, 'RBAC: worker apply → 403, observer POST → 403, observer GET деталей → 200',
+    ivWorkerApply.status === 403 && ivObserverPost.status === 403 && ivObserverGet.status === 200,
+    `workerApply=${ivWorkerApply.status}, observerPost=${ivObserverPost.status}, observerGet=${ivObserverGet.status}`);
+
+  // #12 Изоляция: наша сессия (питомник A) запрошена через URL ЧУЖОГО питомника B (jarB владеет
+  // nurseryB, M4) → findSessionById скоуплен по nursery_id → 404 (не 403: requireNurseryAccess
+  // пропускает, т.к. token.nurseryId == URL nurseryB).
+  const ivForeignNursery = await req(jarB, 'GET', `/nurseries/${nurseryB.id}/inventory-sessions/${ivSessionId}`);
+  check(20, 12, 'Изоляция: сессия питомника A под URL питомника B (jarB) → 404',
+    ivForeignNursery.status === 404, `status=${ivForeignNursery.status}`);
+
+  // Чистка: удаляем свои сессии (каскад по inventory_items). FK location_id→locations БЕЗ
+  // ON DELETE — иначе следующая чистка локаций питомника A упёрлась бы в ссылку сессии.
+  // Растения/локации/движения удалит общая чистка accA в начале следующего прогона.
+  await db('inventory_sessions').where({ nursery_id: nid }).del();
+
+  // Тальли модуля 20 в стиле M17/M19 (баннер + N/N PASS).
+  const m20 = results.filter((x) => x.module === 20);
+  const m20pass = m20.filter((x) => x.pass).length;
+  console.log(`\n---------- MODULE 20 «Инвентаризация» ... ${m20pass}/${m20.length} ${m20pass === m20.length ? 'PASS' : 'FAIL'} ----------`);
+
   // ---------- Итог ----------
   const failed = results.filter((x) => !x.pass);
   console.log(`\n========== ИТОГО: ${results.length - failed.length}/${results.length} PASS ==========`);

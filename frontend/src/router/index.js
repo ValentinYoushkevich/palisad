@@ -17,6 +17,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const ROLE_OWNER = 'owner'
 const ROLE_AGRONOMIST = 'agronomist'
+const ROLE_WORKER = 'worker'
 
 const routes = [
   {
@@ -141,6 +142,31 @@ const routes = [
     meta: {
       public: false,
       roles: [ROLE_OWNER, ROLE_AGRONOMIST]
+    }
+  },
+  {
+    path: '/inventory',
+    name: 'inventory',
+    component: () => import('@/pages/inventory/InventoryPage.vue'),
+    meta: {
+      public: false
+    }
+  },
+  {
+    path: '/inventory/scan',
+    name: 'inventory-scan',
+    component: () => import('@/pages/inventory/InventoryScanPage.vue'),
+    meta: {
+      public: false,
+      roles: [ROLE_OWNER, ROLE_AGRONOMIST, ROLE_WORKER]
+    }
+  },
+  {
+    path: '/inventory/sessions/:id',
+    name: 'inventory-session',
+    component: () => import('@/pages/inventory/InventorySessionPage.vue'),
+    meta: {
+      public: false
     }
   },
   {

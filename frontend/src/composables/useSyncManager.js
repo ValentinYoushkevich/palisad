@@ -1,3 +1,4 @@
+import db from '@/db/indexedDb'
 import { getPendingPhotos, getPhotoById, markPhotoDone, markPhotoFailed } from '@/db/pendingPhotos.service'
 import { getById, getFailedCount, getPending, markDone, markFailed, reconcileLocalId } from '@/db/syncQueue.service'
 import http from '@/services/http'
@@ -53,6 +54,13 @@ async function processQueue(toast) {
   }
 }
 
+// Триггер прогонки очереди из stores/actions (вне setup, где useToast недоступен): гоняем ту
+// же очередь без toast — финальный провал элемента отразится в бейджах по failedCount, а
+// processItem обращается к toast через optional chaining, поэтому падения нет.
+export function triggerSync() {
+  return processQueue()
+}
+
 export function useSyncManager() {
   const toast = useToast()
 
@@ -93,6 +101,11 @@ async function processItem(item, toast) {
       await reconcileLocalId('movements', payload.localId, response?.data)
     } else if (type === 'delete_movement') {
       await http.delete(`/nurseries/${nurseryId}/plants/${payload.plantId}/movements/${payload.id}`)
+    } else if (type === 'create_inventory_session') {
+      // Сессия инвентаризации: POST всей полезной нагрузки (сервер отбрасывает лишние поля —
+      // nurseryId/localId). После успеха локальная scanning-сессия больше не нужна.
+      await http.post(`/nurseries/${nurseryId}/inventory-sessions`, payload)
+      await deleteLocalInventorySession(payload)
     }
 
     await markDone(item.id)
@@ -100,6 +113,15 @@ async function processItem(item, toast) {
     // Идемпотентное удаление: если записи на сервере уже нет (404), повторную доставку
     // delete_* считаем успехом, а не гоняем в ретраи до статуса failed (F2/F8).
     if (isAlreadyDeleted(type, error)) {
+      await markDone(item.id)
+      return
+    }
+
+    // 409 на create_inventory_session — сессия с этим clientRequestId уже создана (повторная
+    // доставка идемпотентного запроса). Считаем успехом: чистим локальную сессию и закрываем
+    // элемент, без ретраев. Проверка идёт ДО generic markFailed.
+    if (type === 'create_inventory_session' && error?.response?.status === 409) {
+      await deleteLocalInventorySession(payload)
       await markDone(item.id)
       return
     }
@@ -112,7 +134,9 @@ async function processItem(item, toast) {
 
     const current = await getById(item.id)
     if (current?.status === 'failed') {
-      toast.add({
+      // toast может быть недоступен (triggerSync из stores/actions зовёт processQueue без
+      // toast) — тогда молча пропускаем всплывашку, бейджи покажут failedCount.
+      toast?.add({
         severity: 'warn',
         summary: 'Ошибка синхронизации',
         detail: 'Не удалось отправить запись после 3 попыток. Нажмите повтор для ручного запуска.',
@@ -124,6 +148,14 @@ async function processItem(item, toast) {
 
 function isAlreadyDeleted(type, error) {
   return (type === 'delete_operation' || type === 'delete_movement') && error?.response?.status === 404
+}
+
+// Удаляет локальную scanning-сессию инвентаризации после успешной (или 409-идемпотентной)
+// доставки на сервер. Guard: localId может отсутствовать в старом/битом payload.
+async function deleteLocalInventorySession(payload) {
+  if (payload?.localId !== undefined && payload?.localId !== null) {
+    await db.inventory_sessions_local.delete(payload.localId)
+  }
 }
 
 async function processPhotoItem(item) {

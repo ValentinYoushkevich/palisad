@@ -112,6 +112,11 @@ const commonNavItems = computed(() => {
       to: '/labels',
       label: 'Этикетки',
       visible: authStore.canWrite
+    },
+    {
+      to: '/inventory',
+      label: 'Инвентаризация',
+      visible: authStore.canWrite
     }
   ]
 

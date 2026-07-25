@@ -13,6 +13,7 @@ import authRouter from '@/routes/auth.router.js';
 import dictionaryRouter from '@/routes/dictionary.router.js';
 import exportRouter from '@/routes/export.router.js';
 import healthRouter from '@/routes/health.router.js';
+import inventorySessionRouter from '@/routes/inventorySession.router.js';
 import labelsRouter from '@/routes/labels.router.js';
 import locationRouter from '@/routes/location.router.js';
 import movementRouter from '@/routes/movement.router.js';
@@ -62,6 +63,9 @@ app.use('/api/nurseries/:nurseryId/prices', priceRouter);
 // Э2 «Экспорт»: CSV-выгрузки питомника (сводка наличия; прайс-лист добавится в Э3).
 // Гейтится feature_export внутри сервиса — на free-тарифе оба формата отдают 403.
 app.use('/api/nurseries/:nurseryId/exports', exportRouter);
+// § «Инвентаризация», Э2: сессии сканирования зоны (создание со сверкой, история, деталь).
+// Стадии «применить»/«акт» встанут поверх этого же префикса.
+app.use('/api/nurseries/:nurseryId/inventory-sessions', inventorySessionRouter);
 app.use('/api/nurseries/:nurseryId/activity', activityLogRouter);
 app.use('/api/nurseries/:nurseryId/notifications', notificationRouter);
 app.use('/api/nurseries/:nurseryId', dictionaryRouter);

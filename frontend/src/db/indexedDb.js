@@ -20,6 +20,23 @@ db.version(2).stores({
   production_stages: 'id, nursery_id, is_system, is_active'
 })
 
+// v3: локальные сессии инвентаризации (ФЭ5). Живут только до успешного синка — sync-менеджер
+// удаляет запись после POST /inventory-sessions (или 409). Поля записи:
+// {
+//   localId (auto),           — первичный ключ (++)
+//   nurseryId,                — питомник (фиксируется при старте, для маршрутизации синка)
+//   locationId,               — корневая локация зоны инвентаризации
+//   locationName?,            — имя зоны для офлайн-UI (сервер его не хранит)
+//   startedAt,                — ISO datetime старта
+//   completedAt?,             — ISO datetime завершения (появляется в completeSession)
+//   clientRequestId?,         — uuid идемпотентности (появляется в completeSession)
+//   status: 'scanning' | 'completed',
+//   scans: [ { code, scannedAt } ]
+// }
+db.version(3).stores({
+  inventory_sessions_local: '++localId, status, nurseryId'
+})
+
 export const dbTables = {
   plants: db.table('plants'),
   locations: db.table('locations'),
@@ -31,7 +48,8 @@ export const dbTables = {
   operations: db.table('operations'),
   movements: db.table('movements'),
   pendingPhotos: db.table('pending_photos'),
-  syncQueue: db.table('sync_queue')
+  syncQueue: db.table('sync_queue'),
+  inventorySessionsLocal: db.table('inventory_sessions_local')
 }
 
 export const DOMAIN_TABLES = [
@@ -45,7 +63,8 @@ export const DOMAIN_TABLES = [
   'operations',
   'movements',
   'pending_photos',
-  'sync_queue'
+  'sync_queue',
+  'inventory_sessions_local'
 ]
 
 export async function clearDomainTables() {
