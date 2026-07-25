@@ -48,6 +48,20 @@ export function getAllPlans() {
   return db('plans').where({ is_active: true }).orderBy('created_at', 'asc');
 }
 
+// Э2: продление активной подписки на duration_days от ТЕКУЩЕГО expires_at (стакание
+// того же плана). Прибавляем интервал в самой БД (expires_at + N days), чтобы не гонять
+// значение через приложение и не терять точность/таймзону. Возвращает обновлённую строку.
+export function extendExpiry(id, durationDays, executor = db) {
+  return executor('subscriptions')
+    .where({ id })
+    .update({
+      expires_at: executor.raw("expires_at + (? * interval '1 day')", [durationDays]),
+      updated_at: executor.fn.now(),
+    })
+    .returning('*')
+    .then((rows) => rows[0]);
+}
+
 export function cancelActive(accountId, executor = db) {
   return executor('subscriptions')
     .where({ account_id: accountId })

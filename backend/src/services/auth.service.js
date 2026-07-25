@@ -284,5 +284,9 @@ function mapAuthUser(user, account) {
     name: user?.name || account?.name || account?.email || 'Пользователь',
     email: account?.email || user?.email || '',
     must_change_password: Boolean(user?.must_change_password),
+    // Э3: флаг платформенного админа едет на фронт (показ /admin на Э6). Привилегия
+    // проверяется на бэке из БД (requirePlatformAdmin), здесь — только UI-подсказка.
+    // account может быть null (staff-сессия) → Boolean(undefined) = false.
+    is_platform_admin: Boolean(account?.is_platform_admin),
   };
 }

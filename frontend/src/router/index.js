@@ -116,6 +116,24 @@ const routes = [
     }
   },
   {
+    path: '/subscription',
+    name: 'subscription',
+    component: () => import('@/pages/subscription/SubscriptionPage.vue'),
+    meta: {
+      public: false,
+      roles: [ROLE_OWNER]
+    }
+  },
+  {
+    path: '/admin',
+    name: 'admin',
+    component: () => import('@/pages/admin/AdminPage.vue'),
+    meta: {
+      public: false,
+      platformAdmin: true
+    }
+  },
+  {
     path: '/',
     redirect: '/plants'
   }
@@ -133,7 +151,8 @@ router.beforeEach(async (to) => {
     isPublicRoute: Boolean(to.meta.public),
     isLoginRoute: to.path === '/login',
     isChangePasswordRoute: to.path === '/change-password',
-    isNurseryCreateRoute: to.path === '/nursery/create'
+    isNurseryCreateRoute: to.path === '/nursery/create',
+    isAdminRoute: to.path === '/admin'
   }
 
   if (!authStore.isAuthenticated && !authStore.isAuthInitialized) {
@@ -156,6 +175,13 @@ router.beforeEach(async (to) => {
 
     if (authStore.mustChangePassword && !routeFlags.isChangePasswordRoute) {
       return { path: '/change-password' }
+    }
+
+    // Платформенный гард проверяем ДО редиректа «нет питомника»: платформенный админ может
+    // не иметь питомника, поэтому /admin исключён из nursery-требования ниже. Сервер всё
+    // равно гардит каждый запрос через requirePlatformAdmin — здесь только UX-скрытие.
+    if (to.meta.platformAdmin && !authStore.isPlatformAdmin) {
+      return { path: '/plants' }
     }
 
     const protectedRedirect = await resolveProtectedRouteRedirect(routeFlags, nurseryStore)
@@ -188,7 +214,9 @@ function hasRoleAccess(requiredRoles, userRole) {
 async function resolveProtectedRouteRedirect(routeFlags, nurseryStore) {
   await nurseryStore.initNurseryContext()
 
-  if (!nurseryStore.nursery && !routeFlags.isNurseryCreateRoute) {
+  // /admin исключён из требования наличия питомника наравне с /nursery/create:
+  // платформенный админ может не иметь своего питомника, но должен попадать в мини-админку.
+  if (!nurseryStore.nursery && !routeFlags.isNurseryCreateRoute && !routeFlags.isAdminRoute) {
     return { path: '/nursery/create' }
   }
 

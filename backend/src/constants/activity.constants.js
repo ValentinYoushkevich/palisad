@@ -23,6 +23,8 @@ export const EVENT_TYPES = {
   USER_ROLE_CHANGED: 'user.role_changed',
 
   AUTH_LOGIN: 'auth.login',
+
+  SUBSCRIPTION_ACTIVATED: 'subscription.activated',
 };
 
 export const ENTITY_TYPES = {

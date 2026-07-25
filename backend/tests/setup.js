@@ -18,6 +18,10 @@ const FREE_DEFAULTS = {
 };
 
 beforeEach(async () => {
+  // Э2: license_codes ссылается на accounts (activated_by_account_id) и plans (plan_id)
+  // БЕЗ ON DELETE CASCADE — активированный код заблокировал бы последующие accounts.del()
+  // и удаление платных планов ниже. Чистим коды ПЕРВЫМИ (для файлов без биллинга — no-op).
+  await db('license_codes').del();
   // Удаление аккаунтов каскадит подписки, питомники и всё вложенное (users, locations,
   // plants, operations, photos, movements, activity_logs, nursery_species, tags,
   // nursery-scoped movement_types/container_types).

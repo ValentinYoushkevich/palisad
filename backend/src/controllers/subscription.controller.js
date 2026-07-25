@@ -29,3 +29,17 @@ export async function changePlan(req, res, next) {
     return next(err);
   }
 }
+
+export async function activateCode(req, res, next) {
+  try {
+    const sub = await subscriptionService.activateCode({
+      accountId: req.user.accountId,
+      userId: req.user.userId,
+      nurseryId: req.user.nurseryId,
+      code: req.body.code,
+    });
+    return res.json(sub);
+  } catch (err) {
+    return next(err);
+  }
+}

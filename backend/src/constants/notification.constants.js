@@ -7,4 +7,5 @@ export const NOTIFICATION_TYPES = {
   SYNC_CONFLICT: 'sync.conflict',
   SUBSCRIPTION_EXPIRING: 'subscription.expiring',
   TASK_DUE: 'task.due',
+  SUBSCRIPTION_ACTIVATED: 'subscription.activated',
 };

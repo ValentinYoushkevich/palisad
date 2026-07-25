@@ -1,6 +1,9 @@
 -- ============================================================
 -- Палисад — предварительная схема БД (PostgreSQL)
--- Версия: v2
+-- Версия: v3
+-- Изменения v3:
+--   - биллинг через лицензионные коды: таблицы license_codes и plan_requests,
+--     accounts.is_platform_admin BOOLEAN NOT NULL DEFAULT false          [миграция 20260725100000]
 -- Изменения v2:
 --   - производственные стадии: production_stages (справочник стадий, системные + кастомные),
 --     plants.stage_id → FK на production_stages, plant_stage_history (журнал смен стадии),
@@ -44,6 +47,7 @@ CREATE TABLE accounts (
   name                   TEXT        NOT NULL,
   last_active_nursery_id UUID,       -- v2: последний активный питомник (мультипитомник);
                                      -- FK на nurseries добавляется ALTER'ом ниже (миграция 20260614120000)
+  is_platform_admin      BOOLEAN     NOT NULL DEFAULT false,  -- v3 (биллинг, миграция 20260725100000): платформенный админ панели лицензий/заявок
   created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -79,6 +83,47 @@ CREATE TABLE subscriptions (
   cancelled_at  TIMESTAMPTZ,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ------------------------------------------------------------
+-- Биллинг через лицензионные коды (v3, миграция 20260725100000)
+--
+-- license_codes — коды активации тарифа, выпускаемые платформенным админом.
+--   code — формат XXXX-XXXX-XXXX (UNIQUE). Активация переводит issued → activated
+--   атомарно (UPDATE ... WHERE status='issued' — защита от двойной активации),
+--   отзыв — issued → revoked. duration_days — срок действия активируемой подписки.
+-- plan_requests — заявки аккаунтов на смену тарифа; обрабатывает платформенный админ
+--   (new → processed).
+-- ------------------------------------------------------------
+
+CREATE TABLE license_codes (
+  id                      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  code                    TEXT        NOT NULL UNIQUE,                 -- формат XXXX-XXXX-XXXX
+  plan_id                 UUID        NOT NULL REFERENCES plans(id),
+  duration_days           INTEGER     NOT NULL
+                                      CONSTRAINT chk_license_codes_duration_days
+                                      CHECK (duration_days > 0),
+  status                  TEXT        NOT NULL DEFAULT 'issued'
+                                      CONSTRAINT chk_license_codes_status
+                                      CHECK (status IN ('issued', 'activated', 'revoked')),
+  note                    TEXT,
+  issued_by_account_id    UUID        REFERENCES accounts(id),
+  activated_by_account_id UUID        REFERENCES accounts(id),
+  activated_at            TIMESTAMPTZ,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE plan_requests (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id    UUID        NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  plan_id       UUID        NOT NULL REFERENCES plans(id),
+  comment       TEXT,
+  status        TEXT        NOT NULL DEFAULT 'new'
+                            CONSTRAINT chk_plan_requests_status
+                            CHECK (status IN ('new', 'processed')),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  processed_at  TIMESTAMPTZ
 );
 
 -- ------------------------------------------------------------
@@ -470,8 +515,8 @@ CREATE TABLE notifications (
   nursery_id  UUID        NOT NULL REFERENCES nurseries(id) ON DELETE CASCADE,
   user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   type        TEXT        NOT NULL
-                          CONSTRAINT chk_notifications_type  -- v2 (D7, миграция 20260724172000)
-                          CHECK (type IN ('user.role_changed', 'sync.conflict', 'subscription.expiring', 'task.due')),
+                          CONSTRAINT chk_notifications_type  -- v3 (Э2, миграция 20260725100500)
+                          CHECK (type IN ('user.role_changed', 'sync.conflict', 'subscription.expiring', 'task.due', 'subscription.activated')),
   payload     JSONB,
   is_read     BOOLEAN     NOT NULL DEFAULT false,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),

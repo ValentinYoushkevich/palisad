@@ -17,25 +17,16 @@
       <p>Растений: до {{ nurseryStore.plantLimit ?? '∞' }}</p>
       <p>Пользователей: до {{ nurseryStore.userLimit ?? '∞' }}</p>
 
+      <p v-if="authStore.isOwner" class="mt-2 text-sm text-slate-600">
+        Смена тарифа, активация кода и заявки — на странице подписки.
+      </p>
       <Button
         v-if="authStore.isOwner"
-        class="mt-2"
-        label="Сменить план"
+        class="mt-1"
+        label="Управление подпиской"
         outlined
-        @click="planVisible = !planVisible"
+        @click="router.push('/subscription')"
       />
-
-      <div v-if="planVisible" class="mt-3 flex flex-col items-start">
-        <Button
-          v-for="plan in nurseryStore.plans"
-          :key="plan.id"
-          :disabled="nurseryStore.subscription?.id === plan.id"
-          :label="`Перейти на ${plan.name}`"
-          severity="secondary"
-          text
-          @click="handleChangePlan(plan.id)"
-        />
-      </div>
     </div>
 
     <NurseryEditDialog v-model:visible="editVisible" />
@@ -55,7 +46,6 @@ const router = useRouter()
 const nurseryStore = useNurseryStore()
 const authStore = useAuthStore()
 const editVisible = ref(false)
-const planVisible = ref(false)
 
 onMounted(async () => {
   await nurseryStore.fetchNursery()
@@ -65,14 +55,6 @@ onMounted(async () => {
     return
   }
 
-  await Promise.all([
-    nurseryStore.fetchSubscription(),
-    nurseryStore.fetchPlans()
-  ])
+  await nurseryStore.fetchSubscription()
 })
-
-async function handleChangePlan(planId) {
-  await nurseryStore.changePlan(planId)
-  planVisible.value = false
-}
 </script>

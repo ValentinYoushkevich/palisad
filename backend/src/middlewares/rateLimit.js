@@ -17,6 +17,14 @@ function intFromEnv(name, fallback) {
 const WINDOW_MS = intFromEnv('RATE_LIMIT_WINDOW_MS', 15 * 60 * 1000);
 const GENERAL_MAX = intFromEnv('RATE_LIMIT_MAX', isTest ? 1_000_000 : 300);
 const AUTH_MAX = intFromEnv('RATE_LIMIT_AUTH_MAX', isTest ? 1_000_000 : 10);
+// Э2: активация лицензионного кода — чувствительный к брутфорсу путь (перебор кодов),
+// поэтому строгий лимит по образцу authLimiter. В test потолок поднят, чтобы фикстуры
+// не упирались в лимит; в проде ~10 попыток на окно.
+const ACTIVATE_MAX = intFromEnv('RATE_LIMIT_ACTIVATE_MAX', isTest ? 1_000_000 : 10);
+// Э3: платформенный админ-API (/api/admin/*). Строгий лимит: узкий, чувствительный
+// контур (выпуск/отзыв кодов, обработка заявок). В test потолок поднят, чтобы фикстуры
+// не упирались в лимит; в проде ~100 запросов на окно.
+const ADMIN_MAX = intFromEnv('RATE_LIMIT_ADMIN_MAX', isTest ? 1_000_000 : 100);
 
 // express-rate-limit v7 отдаёт управление в handler при превышении лимита. Пробрасываем
 // AppError в общий errorHandler, чтобы тело ответа было в формате проекта ({ error }).
@@ -40,4 +48,23 @@ export const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   handler: makeHandler('Слишком много попыток входа, попробуйте позже'),
+});
+
+// Строгий лимитер активации лицензионного кода (Э2): прикрывает перебор кодов.
+export const activateCodeLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  limit: ACTIVATE_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: makeHandler('Слишком много попыток активации, попробуйте позже'),
+});
+
+// Строгий лимитер платформенного админ-API (Э3): весь /api/admin/* за requireAuth +
+// requirePlatformAdmin. Ограничивает частоту выпуска/отзыва кодов и обработки заявок.
+export const adminLimiter = rateLimit({
+  windowMs: WINDOW_MS,
+  limit: ADMIN_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: makeHandler('Слишком много запросов, попробуйте позже'),
 });

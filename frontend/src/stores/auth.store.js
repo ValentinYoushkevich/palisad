@@ -46,6 +46,7 @@ export const useAuthStore = defineStore('auth', {
     isAgronomist: (state) => state.user?.role === ROLE_AGRONOMIST,
     isWorker: (state) => state.user?.role === ROLE_WORKER,
     isObserver: (state) => state.user?.role === ROLE_OBSERVER,
+    isPlatformAdmin: (state) => Boolean(state.user?.is_platform_admin),
     canWrite: (state) => [ROLE_OWNER, ROLE_AGRONOMIST, ROLE_WORKER].includes(state.user?.role),
     canManageStructure: (state) => [ROLE_OWNER, ROLE_AGRONOMIST].includes(state.user?.role),
     canManageStaff: (state) => state.user?.role === ROLE_OWNER,

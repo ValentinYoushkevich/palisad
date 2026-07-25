@@ -8,6 +8,7 @@ import morgan from 'morgan';
 import errorHandler from '@/middlewares/errorHandler.js';
 import { generalLimiter } from '@/middlewares/rateLimit.js';
 import activityLogRouter from '@/routes/activityLog.router.js';
+import adminRouter from '@/routes/admin.router.js';
 import authRouter from '@/routes/auth.router.js';
 import dictionaryRouter from '@/routes/dictionary.router.js';
 import healthRouter from '@/routes/health.router.js';
@@ -17,6 +18,7 @@ import movementRouter from '@/routes/movement.router.js';
 import notificationRouter from '@/routes/notification.router.js';
 import nurseryRouter from '@/routes/nursery.router.js';
 import operationRouter from '@/routes/operation.router.js';
+import planRequestRouter from '@/routes/planRequest.router.js';
 import plansRouter from '@/routes/plans.router.js';
 import plantRouter from '@/routes/plant.router.js';
 import staffRouter from '@/routes/staff.router.js';
@@ -54,6 +56,12 @@ app.use('/api/nurseries/:nurseryId/activity', activityLogRouter);
 app.use('/api/nurseries/:nurseryId/notifications', notificationRouter);
 app.use('/api/nurseries/:nurseryId', dictionaryRouter);
 app.use('/api/subscriptions', subscriptionRouter);
+// Э4: owner-ручки лидов «хочу план» (создать заявку / мои заявки). Отдельный префикс,
+// не пересекается с admin-роутером (/api/admin/plan-requests).
+app.use('/api/plan-requests', planRequestRouter);
+// Э3: платформенный админ-API (лицензии/заявки). Смонтирован ВНЕ nursery-скоупа —
+// собственный requireAuth + requirePlatformAdmin + adminLimiter внутри роутера.
+app.use('/api/admin', adminRouter);
 // B33: алиас GET /api/plans вынесен из app.js в собственный роутер (был инлайн мимо роутеров).
 app.use('/api/plans', plansRouter);
 

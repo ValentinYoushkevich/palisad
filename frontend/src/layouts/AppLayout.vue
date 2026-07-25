@@ -40,6 +40,18 @@
               {{ item.label }}
             </router-link>
           </section>
+
+          <section v-if="platformNavItems.length > 0" class="layout__menuSection">
+            <h2 class="layout__menuTitle">Платформа</h2>
+            <router-link
+              v-for="item in platformNavItems"
+              :key="item.to"
+              class="layout__link"
+              :to="item.to"
+            >
+              {{ item.label }}
+            </router-link>
+          </section>
         </nav>
       </aside>
 
@@ -127,6 +139,23 @@ const adminNavItems = computed(() => {
       to: '/staff',
       label: 'Сотрудники',
       visible: authStore.canManageStaff
+    },
+    {
+      to: '/subscription',
+      label: 'Подписка',
+      visible: authStore.isOwner
+    }
+  ]
+
+  return items.filter((item) => item.visible)
+})
+
+const platformNavItems = computed(() => {
+  const items = [
+    {
+      to: '/admin',
+      label: 'Админка платформы',
+      visible: authStore.isPlatformAdmin
     }
   ]
 

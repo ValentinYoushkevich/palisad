@@ -30,6 +30,7 @@ export const useNurseryStore = defineStore('nursery', {
     nurseries: [],
     subscription: null,
     plans: [],
+    planRequests: [],
     nurseryError: '',
     isLoading: false,
     isInitialized: false
@@ -163,6 +164,37 @@ export const useNurseryStore = defineStore('nursery', {
         this.isLoading = false
       }
     },
+    async activateCode(code) {
+      try {
+        const response = await http.post('/subscriptions/activate-code', { code })
+        this.subscription = response?.data || this.subscription
+        // Активная подписка — часть офлайн-кэша контекста; после активации кода
+        // пересохраняем его, чтобы новые лимиты подхватились и при офлайн-старте.
+        this.persistContext()
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, error: error?.response?.data?.error || 'Не удалось активировать код.' }
+      }
+    },
+    async fetchMyRequests() {
+      try {
+        const response = await http.get('/plan-requests/my')
+        this.planRequests = response?.data || []
+      } catch {
+        // Список заявок вторичен для страницы подписки — при сбое не роняем UI,
+        // оставляем текущее значение пустым.
+        this.planRequests = this.planRequests || []
+      }
+    },
+    async createPlanRequest(planId, comment) {
+      try {
+        await http.post('/plan-requests', { planId, comment })
+        await this.fetchMyRequests()
+        return { ok: true }
+      } catch (error) {
+        return { ok: false, error: error?.response?.data?.error || 'Не удалось отправить заявку.' }
+      }
+    },
     async initNurseryContext() {
       if (this.isInitialized) {
         return
@@ -220,6 +252,7 @@ export const useNurseryStore = defineStore('nursery', {
       this.nurseries = []
       this.subscription = null
       this.plans = []
+      this.planRequests = []
       this.nurseryError = ''
       this.isLoading = false
       this.isInitialized = false

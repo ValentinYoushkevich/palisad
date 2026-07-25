@@ -96,6 +96,10 @@ export async function setup() {
   });
   try {
     await db.migrate.latest();
+    // license_codes ссылается на accounts (issued_by/activated_by) и plans БЕЗ каскада —
+    // чистим ПЕРВЫМ, иначе leftover-код от предыдущего прогона заблокирует accounts.del()
+    // и plans.del() ниже (как и в tests/setup.js). plan_requests каскадятся от accounts.
+    await db('license_codes').del();
     await db('accounts').del();
     await db('species_catalog').del();
     await db('plans').del();

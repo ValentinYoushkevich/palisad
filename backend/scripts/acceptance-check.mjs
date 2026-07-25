@@ -704,6 +704,70 @@ async function main() {
   // Возврат free-плана к дефолтному nursery_limit
   await setPlan({ nursery_limit: 1 });
 
+  // ============ MODULE 18 — Биллинг (лицензионные коды) ============
+  // Платный план под активацию кодом (чистится в конце блока). accA становится
+  // платформенным админом; активатор — owner аккаунта B (jarB: свой питомник + trial-подписка,
+  // не админ). Коды выпускаются под acceptPaidPlan, поэтому чистятся по plan_id (снимает и
+  // FK license_codes.issued_by/activated_by_account_id на accA/accB перед их удалением).
+  const [acceptPaidPlan] = await db('plans').insert({
+    name: 'Accept Paid', slug: `accept-paid-${ts}`, plant_limit: 5000, user_limit: 10,
+    nursery_limit: 5, feature_tags: true, feature_operations: true, feature_qr: true,
+    feature_photos: true, feature_export: true, is_active: true,
+  }).returning('*');
+
+  r = await req(jarA, 'GET', '/admin/license-codes');
+  const adminBefore = r.status;
+  await db('accounts').where({ id: accA.id }).update({ is_platform_admin: true });
+  r = await req(jarA, 'GET', '/admin/license-codes');
+  check(18, 1, 'is_platform_admin из БД: 403 без флага → 200 после установки (тот же cookie)',
+    adminBefore === 403 && r.status === 200, `before=${adminBefore}, after=${r.status}`);
+
+  r = await req(jarA, 'POST', '/admin/license-codes', { planId: acceptPaidPlan.id, durationDays: 30, count: 1 });
+  const code1 = r.data?.[0];
+  const code1Db = code1 && (await db('license_codes').where({ id: code1.id }).first());
+  check(18, 2, 'Выпуск кода → массив кодов, в БД status=issued',
+    [200, 201].includes(r.status) && code1Db?.status === 'issued', `status=${r.status}, db=${code1Db?.status}`);
+
+  r = await req(jarB, 'POST', '/subscriptions/activate-code', { code: code1?.code });
+  check(18, 3, 'Активация: подписка стала Accept Paid, expires_at в будущем',
+    r.status === 200 && r.data?.plan_id === acceptPaidPlan.id &&
+    !!r.data?.expires_at && new Date(r.data.expires_at) > new Date(),
+    `status=${r.status}, plan=${r.data?.plan_id === acceptPaidPlan.id}, exp=${r.data?.expires_at}`);
+
+  r = await req(jarB, 'POST', '/subscriptions/activate-code', { code: code1?.code });
+  check(18, 4, 'Повторная активация того же кода → 404 (единый текст)',
+    r.status === 404 && r.data?.error === 'Код недействителен или уже использован', `status=${r.status}`);
+
+  r = await req(jarB, 'GET', '/subscriptions/current');
+  check(18, 5, 'GET /subscriptions/current активатора → plan_id платного плана',
+    r.status === 200 && r.data?.plan_id === acceptPaidPlan.id,
+    `status=${r.status}, plan=${r.data?.plan_id === acceptPaidPlan.id}`);
+
+  const code2 = (await req(jarA, 'POST', '/admin/license-codes', { planId: acceptPaidPlan.id, durationDays: 30, count: 1 })).data?.[0];
+  const rRevoke = await req(jarA, 'POST', `/admin/license-codes/${code2?.id}/revoke`);
+  const rRevokedAct = await req(jarB, 'POST', '/subscriptions/activate-code', { code: code2?.code });
+  check(18, 6, 'Revoke → status revoked; активация отозванного кода → 404',
+    rRevoke.status === 200 && rRevoke.data?.status === 'revoked' && rRevokedAct.status === 404,
+    `revoke=${rRevoke.status}/${rRevoke.data?.status}, activate=${rRevokedAct.status}`);
+
+  r = await req(jarB, 'POST', '/plan-requests', { planId: acceptPaidPlan.id, comment: 'accept lead' });
+  const leadReq = r.data;
+  const rDupLead = await req(jarB, 'POST', '/plan-requests', { planId: acceptPaidPlan.id, comment: 'dup' });
+  const rAdminLeads = await req(jarA, 'GET', '/admin/plan-requests');
+  const leadsData = rAdminLeads.data?.data ?? rAdminLeads.data;
+  const adminSeesLead = Array.isArray(leadsData) && leadsData.some((x) => x.id === leadReq?.id);
+  const rProcess = await req(jarA, 'POST', `/admin/plan-requests/${leadReq?.id}/process`);
+  check(18, 7, 'Лид: заявка 201, дубль на тот же план 409, админ видит и обрабатывает (processed)',
+    r.status === 201 && rDupLead.status === 409 && adminSeesLead &&
+    rProcess.status === 200 && rProcess.data?.status === 'processed',
+    `create=${r.status}, dup=${rDupLead.status}, sees=${adminSeesLead}, process=${rProcess.status}/${rProcess.data?.status}`);
+
+  // Чистка биллинга: снимаем ссылки на acceptPaidPlan (коды/заявки/подписки) и удаляем план.
+  await db('license_codes').where({ plan_id: acceptPaidPlan.id }).del();
+  await db('plan_requests').where({ plan_id: acceptPaidPlan.id }).del();
+  await db('subscriptions').where({ plan_id: acceptPaidPlan.id }).del();
+  await db('plans').where({ id: acceptPaidPlan.id }).del();
+
   // ---------- Итог ----------
   const failed = results.filter((x) => !x.pass);
   console.log(`\n========== ИТОГО: ${results.length - failed.length}/${results.length} PASS ==========`);
